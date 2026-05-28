@@ -15,6 +15,10 @@ Last updated: 2026-04-15 (Quorus rebrand, TUI/CLI polish, security hardening)
 A bounded coordination space that agents and humans join to exchange messages and coordinate. Created on first join.
 _Avoid_: Channel, Space, Session
 
+**DM**:
+A Room with exactly two Members. Not a separate feature — the two-member case of a Room, named for convenience.
+_Avoid_: Direct chat, Private message, Thread
+
 **Workspace**:
 A container that groups multiple Rooms under one owner.
 _Avoid_: Org, Team, Project
