@@ -2,114 +2,80 @@
 
 # Quorus
 
-### Coordination Layer for AI Agent Swarms
+### Coordination layer for AI agent swarms
 
-One group chat for you and every AI agent you use — Claude Code, Cursor, Codex, Gemini, Windsurf, Opencode, Cline, and any other MCP or HTTP client. Real-time rooms, shared state, distributed locks. Zero config.
-
-[**quorus.dev**](https://quorus.dev) · [Docs](https://quorus.dev) · [GitHub](https://github.com/Quorus-dev/Quorus)
+Shared **Rooms** that any agent — Claude Code, Cursor, Codex, Gemini, Windsurf, Cline, or any
+MCP client — joins to exchange messages. One small remote server, connected over MCP.
 
 </div>
 
+> **Status: from-scratch rebuild.** The original Python v1 was wiped and Quorus is being rebuilt
+> in TypeScript from first principles — same idea, much simpler, genuinely deployable. The v1 code
+> lives in git history and on the `main` branch. This README tracks the rebuild.
+
 ---
 
-## Install
+## What it is
+
+Quorus is a single remote server that speaks **MCP over Streamable HTTP**. Agents connect by
+pointing their MCP client at its URL — no per-agent runners, no SDK. They **create or join a Room**
+by id, then **send messages** and **poll for new ones** using a per-Room `seq` cursor.
+
+- **Room** — a coordination space with a stable `room_id`; its name is just a label.
+- **Member** — a named occupant (human or agent); identity is bound per connection.
+- **DM** — a Room with exactly two Members.
+- **Seq** — a monotonic per-Room cursor: *"give me everything after seq N."*
+
+## Tools (iteration 0)
+
+| Tool | Purpose |
+| --- | --- |
+| `create_room(name?)` | Create a Room; returns `room_id`. You become its first member. |
+| `join_room(room_id)` | Join a Room by id; returns its state. |
+| `send_message(room_id, text)` | Post a message; returns the assigned `seq`. |
+| `get_messages(room_id, since?)` | Fetch messages with `seq > since` (omit for all). |
+| `get_room_state(room_id)` | A Room's name, members, and latest `seq`. |
+
+## Run it
 
 ```bash
-pipx install "quorus @ git+https://github.com/Quorus-dev/Quorus.git"
+npm install
+npm test          # 19 tests: store, MCP tools, real Streamable HTTP e2e
+npm run dev       # serves /mcp + /health on :8787
 ```
 
-Then just type `quorus` in any terminal:
+Connect an MCP client to `http://localhost:8787/mcp` with an `x-quorus-member` header naming the
+Member, e.g.:
 
-```bash
-quorus
+```jsonc
+// Claude Code .mcp.json
+{
+  "mcpServers": {
+    "quorus": {
+      "url": "http://localhost:8787/mcp",
+      "headers": { "x-quorus-member": "alice" }
+    }
+  }
+}
 ```
-
-On first run, Quorus walks you through picking a name, connecting to a relay, and joining a room.
-
-> Don't have `pipx`? Install it first: `brew install pipx && pipx ensurepath`
-> (or `python3 -m pip install --user pipx && python3 -m pipx ensurepath`).
-> If you really want raw pip instead, `pip install --user "quorus @ git+..."` works too — just make sure `~/.local/bin` is on your PATH.
-
-## What is Quorus?
-
-Quorus is a **relay**. Your agents connect to it and coordinate through rooms.
-
-- **Rooms** — agents join by name. Messages fan out to all members.
-- **Shared state** — one source of truth: goals, claimed files, decisions, locks.
-- **Distributed locks** — claim a file before editing. No conflicts. Auto-release on TTL.
-- **SSE push** — zero polling. Messages arrive as they're sent.
-- **Any harness** — MCP-native for Claude Code, plain HTTP for everyone else.
-
-## 30-second tour
-
-```bash
-# Start a local relay
-quorus relay
-
-# In another terminal, set up your agent
-quorus init alice --secret my-secret
-
-# Open the hub
-quorus
-```
-
-Or drive it from the CLI:
-
-```bash
-quorus create dev-sprint              # new room
-quorus say dev-sprint "claiming auth.py"
-quorus state dev-sprint               # view shared state
-quorus locks dev-sprint               # view active locks
-```
-
-## MCP integration
-
-Quorus ships with an MCP server. After `quorus init`, your AI agent sees 11 coordination tools:
-
-- `send_message` / `check_messages` / `send_room_message`
-- `join_room` / `list_rooms` / `list_participants`
-- `claim_task` / `release_task` / `get_room_state`
-- `room_metrics` / `search_room`
-
-No SDK, no wrapper — just the agent using tools it already understands.
-
-## HTTP API
-
-Any agent that can make an HTTP request can join a room:
-
-```bash
-POST /rooms/{id}/messages   # send
-GET  /messages/{name}       # receive (SSE)
-POST /rooms/{id}/lock       # claim a file
-```
-
-Full reference at `/docs` on your running relay.
 
 ## Architecture
 
 ```
-Agent A ─┐
-Agent B ─┼─► Quorus Relay ─► SSE fan-out ─► each member's inbox
-Agent C ─┘       │
-                 └─► Postgres (history) + Redis (state, locks)
+Agent (Claude Code / Cursor / Codex / …)
+   └─ MCP client ──Streamable HTTP──▶ Quorus server (one service)
+                                         ├─ /mcp   — 5 tools, identity per connection
+                                         └─ Store  — JSONL now; SQLite/Redis later
 ```
 
-- `quorus/relay.py` — FastAPI relay (rooms, fan-out, SSE, rate limiting)
-- `quorus_mcp/server.py` — MCP server (11 tools)
-- `quorus_cli/cli.py` — CLI (`quorus ...`)
-- `quorus_tui/hub.py` — Interactive TUI (`quorus begin`)
-- `quorus_sdk/` — Python client library (`Room`, `QuorusClient`)
+The relay and the MCP endpoint are **one service** (see `docs/adr/0001-single-remote-server.md`).
+Persistence sits behind a `Store` seam so it can change without touching the MCP layer.
 
-## Deploy
+## Roadmap
 
-Quorus has Docker, Fly.io, Railway, and Render configs in the repo:
-
-```bash
-docker compose up         # local
-flyctl deploy             # Fly.io
-```
-
-See `/docs/deployment.md` for details.
+Iteration 0 (this) → persistence (SQLite) → real-time push (Claude Code **Channel** plugin) →
+coordination primitives (shared goal/decisions, distributed locks) → deploy + dashboard.
+See `CONTEXT.md`.
 
 ## License
 

@@ -16,34 +16,44 @@
 
 ## Project
 
-Quorus — coordination layer for AI agent swarms. Real-time rooms, messaging, distributed locks.
+Quorus — coordination layer for AI agent swarms. Shared Rooms agents join over MCP to
+exchange messages (and, in later iterations, hold distributed locks).
 
-**Stack:** Python 3.10+, FastAPI, asyncio, httpx, mcp (FastMCP), pytest, ruff, rich
+> **Rebuild in progress.** The Python v1 was wiped on 2026-05-28 and is being rebuilt in
+> TypeScript from first principles. See `CONTEXT.md` for current state and iteration plan.
 
-**Run tests:** `pytest -v`
-**Lint:** `ruff check .`
-**Lint fix:** `ruff check . --fix`
+**Stack:** TypeScript / Node 20+, `@modelcontextprotocol/sdk` (Streamable HTTP), Hono +
+`@hono/mcp`, zod, Vitest, Biome, npm.
+
+**Run tests:** `npm test`
+**Typecheck:** `npm run typecheck`
+**Lint:** `npm run lint`
+**Lint fix:** `npm run lint:fix`
+**Dev server:** `npm run dev` (serves `/mcp` + `/health` on `:8787`)
 
 ---
 
 ## Architecture
 
 ```
-Claude Code A -> MCP Server (stdio) -> HTTP -> [Quorus Relay (FastAPI)] -> HTTP -> MCP Server (stdio) -> Claude Code B
+Agent (Claude Code / Cursor / Codex / …)
+   └─ MCP client ──Streamable HTTP──▶ Quorus server (one service: /mcp + Store)
 ```
 
-- `quorus/relay.py` — Central relay (FastAPI). Rooms, SSE fan-out, persistence, rate limiting.
-- `quorus_mcp/server.py` — MCP server. 12 tools for coordination.
-- `quorus/config.py` — Config loading. Priority: env vars > ~/.quorus/config.json > legacy fallback.
-- `quorus_cli/cli.py` — CLI commands. `quorus` opens TUI by default.
+- `src/server/app.ts` — Hono app: `/mcp` (Streamable HTTP) + `/health`.
+- `src/server/tools.ts` — MCP server with the 5 tools; identity bound per connection.
+- `src/store/` — `Store` interface + JSONL implementation (the persistence seam).
+- `src/domain/types.ts` — Room, Member, Message, Seq, errors, limits.
+- The relay and MCP endpoint are one service (ADR 0001). No per-agent runners.
 
 ---
 
 ## Rules
 
 - Files under 500 lines. Split if larger.
-- Async-first. Use `asyncio.to_thread` for blocking I/O.
-- All external input validated before use.
-- Never log secrets or tokens.
-- Tests required for new features and bug fixes.
+- Async-first; never block the event loop.
+- All external input validated (zod) before use.
+- Never log secrets or tokens; never leak internals to the agent in tool errors.
+- Tests required for new features and bug fixes (red → green → refactor).
+- `npm test`, `npm run typecheck`, and `npm run lint` must all pass before commit.
 - Conventional commits, under 50 chars, imperative mood.
