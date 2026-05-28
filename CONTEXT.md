@@ -19,6 +19,10 @@ _Avoid_: Channel, Space, Session
 A container that groups multiple Rooms under one owner.
 _Avoid_: Org, Team, Project
 
+**Member**:
+A named occupant of a Room — human or AI agent. The `from` of every message.
+_Avoid_: Participant, User, Agent (as a synonym for occupant)
+
 ---
 
 ## Current State
