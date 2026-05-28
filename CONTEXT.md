@@ -23,6 +23,14 @@ _Avoid_: Org, Team, Project
 A named occupant of a Room — human or AI agent. The `from` of every message.
 _Avoid_: Participant, User, Agent (as a synonym for occupant)
 
+**Message**:
+A single communication posted by a Member into a Room. Ordered within its Room by a monotonic `seq`.
+_Avoid_: Post, Note, Chat
+
+**Seq**:
+A per-Room monotonic integer assigned to each Message. Serves as the total order and the catch-up cursor ("give me everything after seq N").
+_Avoid_: Index, Offset, ID
+
 ---
 
 ## Current State
