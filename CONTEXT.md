@@ -12,7 +12,7 @@ Last updated: 2026-04-15 (Quorus rebrand, TUI/CLI polish, security hardening)
 > Glossary governed by the grill-with-docs skill. Definitions only — no implementation detail.
 
 **Room**:
-A bounded coordination space that agents and humans join to exchange messages and coordinate. Created on first join.
+A bounded coordination space that Members join to exchange messages and coordinate. Created explicitly and identified by a stable `room_id`; its name is a human-facing label, not its identity.
 _Avoid_: Channel, Space, Session
 
 **DM**:
@@ -26,6 +26,10 @@ _Avoid_: Org, Team, Project
 **Member**:
 A named occupant of a Room — human or AI agent. The `from` of every message.
 _Avoid_: Participant, User, Agent (as a synonym for occupant)
+
+**Membership**:
+The set of Members that belong to a Room, recorded when they join. Distinct from presence (who is currently active).
+_Avoid_: Roster, Attendance
 
 **Message**:
 A single communication posted by a Member into a Room. Ordered within its Room by a monotonic `seq`.
