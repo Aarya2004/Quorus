@@ -7,6 +7,20 @@ Last updated: 2026-04-15 (Quorus rebrand, TUI/CLI polish, security hardening)
 
 ---
 
+## Language
+
+> Glossary governed by the grill-with-docs skill. Definitions only — no implementation detail.
+
+**Room**:
+A bounded coordination space that agents and humans join to exchange messages and coordinate. Created on first join.
+_Avoid_: Channel, Space, Session
+
+**Workspace**:
+A container that groups multiple Rooms under one owner.
+_Avoid_: Org, Team, Project
+
+---
+
 ## Current State
 
 Quorus (package: quorus) is the coordination layer for AI agent swarms. "VS Code Live Share for AI Agents" — any model, any machine, any platform coordinates in real-time.
