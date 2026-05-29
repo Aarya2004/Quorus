@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-05-28 (first-principles rebuild — wiped Python v1, TypeScript iteration 0)
+Last updated: 2026-05-29 (first-principles rebuild — TypeScript iteration 0 + server logging)
 
 ---
 
@@ -98,6 +98,7 @@ Iteration 0 complete. Next iterations, in order:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
 | 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
 | 2026-05-28 | chore: wipe Python v1; scaffold TypeScript project (Hono + MCP SDK)        |
 | 2026-05-28 | docs: ADR 0001 — relay and MCP endpoint are one service                    |

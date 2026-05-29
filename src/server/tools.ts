@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import { log } from "../log";
 import type { Store } from "../store/store";
 
 function ok(text: string, structured?: Record<string, unknown>): CallToolResult {
@@ -14,10 +15,55 @@ function fail(text: string): CallToolResult {
   return { content: [{ type: "text", text }], isError: true };
 }
 
-/** Translate a thrown error into a safe tool error — never leak internals. */
-function toError(err: unknown): CallToolResult {
-  if (err instanceof RoomNotFoundError) return fail(err.message);
-  return fail("Internal error handling the request.");
+function firstText(result: CallToolResult): string | undefined {
+  const block = result.content?.[0];
+  return block && block.type === "text" ? block.text : undefined;
+}
+
+/**
+ * Wrap a tool handler with timing, structured logging, and uniform error
+ * handling. Handlers just do the work and throw on failure; this turns a
+ * RoomNotFoundError into a safe client error and anything else into a generic
+ * one (never leaking internals). Empty reads log at `debug` so idle polling
+ * doesn't drown the logs.
+ */
+function logged<A>(
+  tool: string,
+  member: string,
+  handler: (args: A) => Promise<CallToolResult>,
+): (args: A) => Promise<CallToolResult> {
+  return async (args: A): Promise<CallToolResult> => {
+    const start = performance.now();
+    const roomRaw = (args as { room_id?: unknown }).room_id;
+    const room = typeof roomRaw === "string" ? roomRaw : undefined;
+    try {
+      const result = await handler(args);
+      const ms = Math.round(performance.now() - start);
+      const sc = result.structuredContent as Record<string, unknown> | undefined;
+      const count = Array.isArray(sc?.messages) ? sc.messages.length : undefined;
+      const seq = typeof sc?.seq === "number" ? sc.seq : undefined;
+      if (result.isError) {
+        log.warn("tool.err", { tool, member, room, ms, reason: firstText(result) });
+      } else {
+        log[count === 0 ? "debug" : "info"]("tool.ok", { tool, member, room, ms, seq, count });
+      }
+      return result;
+    } catch (err) {
+      const ms = Math.round(performance.now() - start);
+      if (err instanceof RoomNotFoundError) {
+        log.warn("tool.err", { tool, member, room, ms, reason: "room not found" });
+        return fail(err.message);
+      }
+      log.error("tool.crash", {
+        tool,
+        member,
+        room,
+        ms,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return fail("Internal error handling the request.");
+    }
+  };
 }
 
 /**
@@ -55,10 +101,10 @@ export function createMcpServer(store: Store, member: string): McpServer {
       description: "Create a new Room and return its room_id. You become its first member.",
       inputSchema: { name: z.string().max(MAX_NAME_LENGTH).optional() },
     },
-    async ({ name }) => {
+    logged("create_room", member, async ({ name }: { name?: string }) => {
       const room = await store.createRoom(name?.trim() || "room", member);
       return ok(`Created room "${room.name}" (${room.roomId}).`, { ...room });
-    },
+    }),
   );
 
   server.registerTool(
@@ -68,16 +114,12 @@ export function createMcpServer(store: Store, member: string): McpServer {
       description: "Join an existing Room by room_id. Returns the Room's current state.",
       inputSchema: { room_id: z.string().min(1) },
     },
-    async ({ room_id }) => {
-      try {
-        const room = await store.joinRoom(room_id, member);
-        return ok(`Joined "${room.name}" (${room.roomId}). Members: ${room.members.join(", ")}.`, {
-          ...room,
-        });
-      } catch (err) {
-        return toError(err);
-      }
-    },
+    logged("join_room", member, async ({ room_id }: { room_id: string }) => {
+      const room = await store.joinRoom(room_id, member);
+      return ok(`Joined "${room.name}" (${room.roomId}). Members: ${room.members.join(", ")}.`, {
+        ...room,
+      });
+    }),
   );
 
   server.registerTool(
@@ -87,14 +129,10 @@ export function createMcpServer(store: Store, member: string): McpServer {
       description: "Post a message to a Room. Returns the assigned seq.",
       inputSchema: { room_id: z.string().min(1), text: z.string().min(1).max(MAX_TEXT_LENGTH) },
     },
-    async ({ room_id, text }) => {
-      try {
-        const msg = await store.appendMessage(room_id, member, text);
-        return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
-      } catch (err) {
-        return toError(err);
-      }
-    },
+    logged("send_message", member, async ({ room_id, text }: { room_id: string; text: string }) => {
+      const msg = await store.appendMessage(room_id, member, text);
+      return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
+    }),
   );
 
   server.registerTool(
@@ -104,17 +142,17 @@ export function createMcpServer(store: Store, member: string): McpServer {
       description: "Fetch messages from a Room with seq greater than `since` (omit to get all).",
       inputSchema: { room_id: z.string().min(1), since: z.number().int().min(0).optional() },
     },
-    async ({ room_id, since }) => {
-      try {
+    logged(
+      "get_messages",
+      member,
+      async ({ room_id, since }: { room_id: string; since?: number }) => {
         const messages = await store.getMessages(room_id, since);
         const text = messages.length
           ? messages.map((m) => `[${m.seq}] ${m.from}: ${m.text}`).join("\n")
           : "(no new messages)";
         return ok(text, { messages });
-      } catch (err) {
-        return toError(err);
-      }
-    },
+      },
+    ),
   );
 
   server.registerTool(
@@ -124,16 +162,16 @@ export function createMcpServer(store: Store, member: string): McpServer {
       description: "Return a Room's name, members, and latest seq.",
       inputSchema: { room_id: z.string().min(1) },
     },
-    async ({ room_id }) => {
+    logged("get_room_state", member, async ({ room_id }: { room_id: string }) => {
       const room = await store.getRoom(room_id);
-      if (!room) return fail(`Room not found: ${room_id}`);
+      if (!room) throw new RoomNotFoundError(room_id);
       const messages = await store.getMessages(room_id, 0);
       const latestSeq = messages.reduce((max, m) => Math.max(max, m.seq), 0);
       return ok(
         `${room.name} (${room.roomId}) — members: ${room.members.join(", ")}; latest seq ${latestSeq}.`,
         { roomId: room.roomId, name: room.name, members: room.members, latestSeq },
       );
-    },
+    }),
   );
 
   return server;

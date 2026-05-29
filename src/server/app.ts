@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { Hono } from "hono";
+import { log } from "../log";
 import type { Store } from "../store/store";
 import { createMcpServer } from "./tools";
+
+const short = (id: string | undefined): string | undefined => id?.slice(0, 8);
 
 /**
  * Build the Quorus HTTP app: a single `/mcp` endpoint speaking MCP over
@@ -25,22 +28,32 @@ export function createApp(store: Store): Hono {
     // Continuation of an established session.
     if (sessionId) {
       const transport = sessions.get(sessionId);
-      if (!transport) return c.json({ error: "unknown session" }, 404);
+      if (!transport) {
+        log.warn("session.unknown", { session: short(sessionId) });
+        return c.json({ error: "unknown session" }, 404);
+      }
       return (await transport.handleRequest(c)) ?? c.body(null, 204);
     }
 
     // New session — must declare a Member identity.
     const member = c.req.header("x-quorus-member")?.trim();
-    if (!member) return c.json({ error: "x-quorus-member header required" }, 401);
+    if (!member) {
+      log.warn("session.reject", { reason: "missing x-quorus-member" });
+      return c.json({ error: "x-quorus-member header required" }, 401);
+    }
 
     const transport: StreamableHTTPTransport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id: string) => {
         sessions.set(id, transport);
+        log.info("session.open", { member, session: short(id) });
       },
     });
     transport.onclose = () => {
-      if (transport.sessionId) sessions.delete(transport.sessionId);
+      if (transport.sessionId) {
+        sessions.delete(transport.sessionId);
+        log.info("session.close", { member, session: short(transport.sessionId) });
+      }
     };
 
     const server = createMcpServer(store, member);
