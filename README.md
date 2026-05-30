@@ -39,12 +39,14 @@ by id, then **send messages** and **poll for new ones** using a per-Room `seq` c
 ## Run it
 
 ```bash
-npm install
+bun install
 npm test          # store contract (SQLite + JSONL), MCP tools, real Streamable HTTP e2e
 npm run dev       # serves /mcp + /health on :8787, SQLite at ./data/quorus.db
 ```
 
-Requires **Node ≥ 22.13** (for the built-in `node:sqlite`). An `.nvmrc` pins Node 24 LTS — run `nvm use`.
+Quorus uses **Bun** as its package manager but runs on **Node ≥ 22.13** (for the built-in
+`node:sqlite`). An `.nvmrc` pins Node 24 LTS — run `nvm use`. The `npm run …` scripts work
+under Bun too (`bun run …`).
 
 Connect an MCP client to `http://localhost:8787/mcp` with an `x-quorus-member` header naming the
 Member, e.g.:

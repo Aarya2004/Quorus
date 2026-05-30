@@ -22,9 +22,9 @@ exchange messages (and, in later iterations, hold distributed locks).
 > **Rebuild in progress.** The Python v1 was wiped on 2026-05-28 and is being rebuilt in
 > TypeScript from first principles. See `CONTEXT.md` for current state and iteration plan.
 
-**Stack:** TypeScript / Node ≥22.13 (24 LTS recommended; `node:sqlite` needs it),
+**Stack:** TypeScript / Node ≥22.13 (24 LTS; `node:sqlite` needs it),
 `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`, zod, `node:sqlite`,
-Vitest, Biome, npm.
+Vitest, Biome. Package manager: **Bun** (`bun install`); runtime stays Node.
 
 **Run tests:** `npm test`
 **Typecheck:** `npm run typecheck`
@@ -43,7 +43,7 @@ Agent (Claude Code / Cursor / Codex / …)
 
 - `src/server/app.ts` — Hono app: `/mcp` (Streamable HTTP) + `/health`.
 - `src/server/tools.ts` — MCP server with the 5 tools; identity bound per connection.
-- `src/store/` — `Store` interface + JSONL implementation (the persistence seam).
+- `src/store/` — `Store` interface + SQLite (default) and JSONL implementations (the persistence seam).
 - `src/domain/types.ts` — Room, Member, Message, Seq, errors, limits.
 - The relay and MCP endpoint are one service (ADR 0001). No per-agent runners.
 
