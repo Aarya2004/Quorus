@@ -39,6 +39,10 @@ _Avoid_: Post, Note, Chat
 A per-Room monotonic integer assigned to each Message. Serves as the total order and the catch-up cursor ("give me everything after seq N").
 _Avoid_: Index, Offset, ID
 
+**Retention**:
+The policy governing how long a Room's Messages are kept. Default: indefinite.
+_Avoid_: Expiry, TTL, Cleanup
+
 ---
 
 ## Current State
