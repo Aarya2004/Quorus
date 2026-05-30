@@ -44,6 +44,8 @@ npm test          # store contract (SQLite + JSONL), MCP tools, real Streamable 
 npm run dev       # serves /mcp + /health on :8787, SQLite at ./data/quorus.db
 ```
 
+Requires **Node ≥ 22.13** (for the built-in `node:sqlite`). An `.nvmrc` pins Node 24 LTS — run `nvm use`.
+
 Connect an MCP client to `http://localhost:8787/mcp` with an `x-quorus-member` header naming the
 Member, e.g.:
 

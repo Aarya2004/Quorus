@@ -22,8 +22,9 @@ exchange messages (and, in later iterations, hold distributed locks).
 > **Rebuild in progress.** The Python v1 was wiped on 2026-05-28 and is being rebuilt in
 > TypeScript from first principles. See `CONTEXT.md` for current state and iteration plan.
 
-**Stack:** TypeScript / Node 20+, `@modelcontextprotocol/sdk` (Streamable HTTP), Hono +
-`@hono/mcp`, zod, Vitest, Biome, npm.
+**Stack:** TypeScript / Node ≥22.13 (24 LTS recommended; `node:sqlite` needs it),
+`@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`, zod, `node:sqlite`,
+Vitest, Biome, npm.
 
 **Run tests:** `npm test`
 **Typecheck:** `npm run typecheck`

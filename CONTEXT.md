@@ -79,7 +79,7 @@ website/                 # retained Vite+React app — future read-only dashboar
 docs/adr/                # architecture decision records
 ```
 
-**Stack:** TypeScript / Node 20+, `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`,
+**Stack:** TypeScript / Node ≥22.13 (24 LTS), `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`,
 zod, `node:sqlite`, Vitest, Biome, npm.
 
 **Run:** `npm test` · `npm run typecheck` · `npm run lint` · `npm run dev` (server on `:8787`,
