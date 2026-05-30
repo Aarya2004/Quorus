@@ -40,8 +40,8 @@ by id, then **send messages** and **poll for new ones** using a per-Room `seq` c
 
 ```bash
 npm install
-npm test          # 19 tests: store, MCP tools, real Streamable HTTP e2e
-npm run dev       # serves /mcp + /health on :8787
+npm test          # store contract (SQLite + JSONL), MCP tools, real Streamable HTTP e2e
+npm run dev       # serves /mcp + /health on :8787, SQLite at ./data/quorus.db
 ```
 
 Connect an MCP client to `http://localhost:8787/mcp` with an `x-quorus-member` header naming the
@@ -65,17 +65,17 @@ Member, e.g.:
 Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶ Quorus server (one service)
                                          ├─ /mcp   — 5 tools, identity per connection
-                                         └─ Store  — JSONL now; SQLite/Redis later
+                                         └─ Store  — SQLite (default) or JSONL; Postgres/Redis later
 ```
 
-The relay and the MCP endpoint are **one service** (see `docs/adr/0001-single-remote-server.md`).
-Persistence sits behind a `Store` seam so it can change without touching the MCP layer.
+The relay and the MCP endpoint are **one service** (ADR 0001). Persistence sits behind a `Store`
+seam (ADR 0002): SQLite via Node's built-in `node:sqlite` by default, JSONL for zero-config dev.
 
 ## Roadmap
 
-Iteration 0 (this) → persistence (SQLite) → real-time push (Claude Code **Channel** plugin) →
-coordination primitives (shared goal/decisions, distributed locks) → deploy + dashboard.
-See `CONTEXT.md`.
+Done: iteration 0 + structured logging + SQLite persistence. Next: real-time delivery (long-poll
+`wait` mode, universal across clients) → deploy to a real URL → coordination primitives (shared
+goal/decisions, distributed locks) → dashboard. See `CONTEXT.md`.
 
 ## License
 

@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-05-29 (first-principles rebuild — TypeScript iteration 0 + server logging)
+Last updated: 2026-05-30 (rebuild — iteration 0 + server logging + SQLite persistence)
 
 ---
 
@@ -64,18 +64,22 @@ SQLite/Redis untouched.
 src/
   domain/types.ts        # Room, Member, Message, Seq, errors, limits
   store/store.ts         # Store interface (the persistence seam)
-  store/jsonl-store.ts   # append-only JSONL store, per-Room write queue for monotonic seq
+  store/sqlite-store.ts  # SQLite store (node:sqlite) — the server default
+  store/jsonl-store.ts   # append-only JSONL store — zero-config dev alternative
+  store/store-contract.ts# shared behavioural suite both stores must pass
+  log.ts                 # tiny structured logger (level-gated, greppable)
   server/tools.ts        # builds an MCP server with the 5 tools, identity bound per connection
   server/app.ts          # Hono app: /mcp (Streamable HTTP) + /health
-  index.ts               # bootstrap: JsonlStore + serve
+  index.ts               # bootstrap: SqliteStore + serve
 website/                 # retained Vite+React app — future read-only dashboard
 docs/adr/                # architecture decision records
 ```
 
 **Stack:** TypeScript / Node 20+, `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`,
-zod, Vitest, Biome, npm.
+zod, `node:sqlite`, Vitest, Biome, npm.
 
-**Run:** `npm test` · `npm run typecheck` · `npm run lint` · `npm run dev` (server on `:8787`).
+**Run:** `npm test` · `npm run typecheck` · `npm run lint` · `npm run dev` (server on `:8787`,
+SQLite at `./data/quorus.db`).
 
 **How an agent connects:** add the server URL as a remote MCP server with an `x-quorus-member`
 header carrying its Member name. Identity is bound per connection — no tool takes a `from` arg.
@@ -84,13 +88,12 @@ header carrying its Member name. Identity is bound per connection — no tool ta
 
 ## In Progress
 
-Iteration 0 complete. Next iterations, in order:
+Iteration 0 + logging + **persistence (SQLite)** complete. Next iterations, in order:
 
-1. **Identity + Rooms** polish (DM auto-naming, room discovery as needed)
-2. **Persistence** — swap JSONL for SQLite behind the `Store` seam
-3. **Real-time** — push via a Claude Code **Channel** plugin (not custom SSE; see research)
-4. **Coordination** — shared goal/decisions + distributed locks
-5. **Deploy + UX** — Docker + one host, tiny CLI, wire `website/` as read-only dashboard
+1. **Real-time** — `wait` mode on get_messages (long-poll, universal) and/or a Claude Code **Channel** plugin
+2. **Deploy + UX** — Docker + one host, tiny CLI, wire `website/` as read-only dashboard
+3. **Coordination** — shared goal/decisions + distributed locks
+4. **Identity + Rooms** polish (DM auto-naming, `list_rooms` discovery)
 
 ---
 
@@ -98,6 +101,8 @@ Iteration 0 complete. Next iterations, in order:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
+| 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
 | 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
 | 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
 | 2026-05-28 | chore: wipe Python v1; scaffold TypeScript project (Hono + MCP SDK)        |
@@ -112,7 +117,7 @@ Iteration 0 complete. Next iterations, in order:
 Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶  Quorus server  (one deployable service)
                                           ├─ /mcp   — 5 tools, identity per connection
-                                          └─ Store  — JSONL now; SQLite/Redis later
+                                          └─ Store  — SQLite (default) or JSONL; Postgres/Redis later
 ```
 
 Any MCP-capable client works with zero per-agent code (no bespoke runners). See `docs/adr/`.
@@ -128,6 +133,7 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Membership** tracked from iteration 0 (roster only); access control deferred.
 - **Pull-only** delivery in iteration 0; real-time arrives later via a Claude Code Channel.
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
+- **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
 - MIT licensed.
 
 ---

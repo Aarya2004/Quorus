@@ -5,7 +5,7 @@ import { serve } from "@hono/node-server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { JsonlStore } from "../store/jsonl-store";
+import { SqliteStore } from "../store/sqlite-store";
 import { createApp } from "./app";
 
 // biome-ignore lint/suspicious/noExplicitAny: tests read loosely-typed tool output
@@ -16,7 +16,7 @@ let mcpUrl: URL;
 
 beforeAll(async () => {
   const dir = await mkdtemp(join(tmpdir(), "quorus-http-"));
-  const app = createApp(new JsonlStore(dir));
+  const app = createApp(new SqliteStore(join(dir, "quorus.db")));
   await new Promise<void>((resolve) => {
     httpServer = serve({ fetch: app.fetch, port: 0 }, (info) => {
       mcpUrl = new URL(`http://localhost:${info.port}/mcp`);
