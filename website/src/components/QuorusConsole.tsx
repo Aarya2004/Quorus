@@ -16,6 +16,7 @@ type Message = {
   content: string;
   timestamp: string;
   message_type?: string;
+  failed?: boolean;
 };
 
 // ── Color system ──────────────────────────────────────────────────────────────
@@ -316,6 +317,11 @@ function MsgRow({ msg, myName }: { msg: Message; myName: string }) {
               {mtype}
             </span>
           )}
+          {msg.failed && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-300/80 font-mono">
+              failed to send
+            </span>
+          )}
           <span className="text-[11px] text-white/20 font-mono opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
             {ts(msg.timestamp ?? "")}
           </span>
@@ -323,7 +329,11 @@ function MsgRow({ msg, myName }: { msg: Message; myName: string }) {
         <p
           className="text-sm leading-relaxed break-words"
           style={{
-            color: isMe ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.65)",
+            color: msg.failed
+              ? "rgba(248,113,113,0.7)"
+              : isMe
+                ? "rgba(255,255,255,0.85)"
+                : "rgba(255,255,255,0.65)",
           }}
         >
           {msg.content}
@@ -468,18 +478,24 @@ export default function QuorusConsole() {
       if (!content || !activeRoom || sending) return;
       setSending(true);
       setDraft("");
-      // Optimistic echo
+      // Optimistic echo, tagged so we can mark it failed if the send doesn't land.
+      const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setMessages((prev) => [
         ...prev,
         {
+          id: localId,
           from_name: myName,
           content,
           timestamp: new Date().toISOString(),
           message_type: "chat",
         },
       ]);
+      const markFailed = () =>
+        setMessages((prev) =>
+          prev.map((m) => (m.id === localId ? { ...m, failed: true } : m)),
+        );
       try {
-        await relayFetch(
+        const r = await relayFetch(
           relay,
           apiKey,
           `rooms/${encodeURIComponent(activeRoom)}/messages`,
@@ -492,8 +508,11 @@ export default function QuorusConsole() {
             }),
           },
         );
+        // relayFetch returns the raw Response and only throws on network
+        // failure — a 4xx/5xx still resolves, so check status explicitly.
+        if (!r.ok) markFailed();
       } catch {
-        // send failure is silently ignored; optimistic message already shown
+        markFailed();
       }
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 10);
