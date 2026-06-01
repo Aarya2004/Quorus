@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { RoomNotFoundError, type RoomRecord, type StoredMessage } from "../domain/types";
+import { log } from "../log";
 import type { Store } from "./store";
 
 /**
@@ -149,7 +150,9 @@ export class JsonlStore implements Store {
         const msg = JSON.parse(trimmed) as StoredMessage;
         if (typeof msg.seq === "number" && msg.seq > since) out.push(msg);
       } catch {
-        // Skip malformed lines rather than failing the whole read.
+        // Skip malformed lines rather than failing the whole read, but record
+        // it — a corrupt line is silent data loss worth seeing in the logs.
+        log.warn("jsonl.skip-malformed-line", { room: roomId });
       }
     }
     return out;
