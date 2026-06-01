@@ -1,0 +1,14 @@
+node_modules
+dist
+data
+.git
+.gitignore
+website
+docs
+*.test.ts
+**/*.test.ts
+.nvmrc
+biome.json
+README.md
+CONTEXT.md
+CLAUDE.md
