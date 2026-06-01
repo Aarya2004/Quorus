@@ -148,8 +148,10 @@ Iteration 0 + logging + **persistence (SQLite)** complete. Reordered for **dogfo
 validation of the Positioning Hypothesis (above) — get Aarya + Arav coordinating cross-machine,
 cheaply, before investing further:
 
-1. **Cheapest cross-machine path** — deploy to one reachable host so two machines' Orchestrators
-   can join the same Room (Docker + one host, a tiny connect helper). The minimum to dogfood.
+1. **Cheapest cross-machine path** — Dockerfile + `fly.toml` + `docs/deploy.md`
+   DONE. Remaining: run `fly deploy` (needs Fly auth) and **land shared-token
+   auth before any real dogfood** (un-gated host is smoke-test only — ADR 0004
+   / deploy.md auth gate).
 2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
    loop or the `website/` app wired as a read-only dashboard).
 3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
@@ -165,6 +167,7 @@ cheaply, before investing further:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
 | 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
@@ -201,6 +204,11 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Positioning is a hypothesis**, validated by Aarya + Arav dogfooding cross-machine before further investment.
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
 - **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
+- **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
+  MCP sessions are ephemeral (cold start drops them) — a 404 after idle is
+  expected (ADR 0004). Single-machine is load-bearing (WAL + in-memory sessions).
+- **Auth gate**: the deploy ships un-gated; shared-token auth is a **hard
+  prerequisite before real dogfooding**, not an optional follow-up.
 - MIT licensed.
 
 ---
