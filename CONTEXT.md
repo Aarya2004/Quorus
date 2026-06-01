@@ -44,7 +44,7 @@ A per-Room monotonic integer assigned to each Message. Serves as the total order
 _Avoid_: Index, Offset, ID
 
 **Retention**:
-The policy governing how long a Room's Messages are kept. Default: indefinite.
+The policy governing how long a Room's Messages are kept. Default: indefinite — bounded in practice by the deploy's storage (e.g. the Fly volume size), not by a time policy. No eviction yet.
 _Avoid_: Expiry, TTL, Cleanup
 
 ## Relationships
