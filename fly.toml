@@ -1,0 +1,40 @@
+# Quorus — single scale-to-zero machine + persistent SQLite volume.
+# See docs/adr/0004 for the scale-to-zero / ephemeral-session trade-off.
+app = "quorus"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+  QUORUS_DB_PATH = "/data/quorus.db"
+
+# SQLite lives on a persistent volume. WAL mode is safe on this local
+# block device; it would NOT be on a network FS — another reason this
+# deploy MUST stay single-machine.
+[mounts]
+  source = "quorus_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # Scale to zero when idle (cheapest dogfood host). A cold start wipes the
+  # in-memory MCP sessions Map, so a `404 unknown session` after idle is
+  # EXPECTED — clients re-initialize. Do not "fix" this by removing it; see
+  # ADR 0004. Revisit (durable sessions / always-warm) before public/alpha.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
