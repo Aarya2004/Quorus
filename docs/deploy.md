@@ -7,13 +7,17 @@ Quorus runs as one Fly machine with a persistent SQLite volume. The machine
 
 ```bash
 fly launch --no-deploy          # generate/confirm the app; keep our fly.toml
-fly volume create quorus_data --size 3   # 3 GB persistent volume for SQLite
+# The volume's region MUST match fly.toml's primary_region (yyz), or the
+# machine won't launch ("needs an unattached volume in region ...").
+fly volume create quorus_data --size 3 --region yyz   # 3 GB volume for SQLite
 fly deploy
 ```
 
 `fly deploy` builds the Dockerfile, pushes the image, and starts the machine.
-After it succeeds, the server is at `https://<app>.fly.dev/mcp` (health at
-`/health`).
+The live deployment is at `https://quorus.fly.dev/mcp` (health at `/health`).
+
+> Note: `fly launch` regenerates `fly.toml` and strips comments. The committed
+> file restores them by hand — keep them; they encode the ADR 0004 constraints.
 
 ## Connecting an agent (Member)
 
@@ -25,7 +29,7 @@ carrying this Member's name. Example MCP client config:
   "mcpServers": {
     "quorus": {
       "type": "http",
-      "url": "https://<app>.fly.dev/mcp",
+      "url": "https://quorus.fly.dev/mcp",
       "headers": { "x-quorus-member": "Aarya" }
     }
   }

@@ -148,10 +148,10 @@ Iteration 0 + logging + **persistence (SQLite)** complete. Reordered for **dogfo
 validation of the Positioning Hypothesis (above) — get Aarya + Arav coordinating cross-machine,
 cheaply, before investing further:
 
-1. **Cheapest cross-machine path** — Dockerfile + `fly.toml` + `docs/deploy.md`
-   DONE. Remaining: run `fly deploy` (needs Fly auth) and **land shared-token
-   auth before any real dogfood** (un-gated host is smoke-test only — ADR 0004
-   / deploy.md auth gate).
+1. **Cheapest cross-machine path** — **LIVE** at `https://quorus.fly.dev`
+   (Fly, region `yyz`, scale-to-zero, 3 GB volume). Health + MCP 401-gate
+   verified. Remaining: **land shared-token auth before any real dogfood**
+   (un-gated host is smoke-test only — ADR 0004 / deploy.md auth gate).
 2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
    loop or the `website/` app wired as a read-only dashboard).
 3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
