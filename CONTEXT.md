@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-05-30 (rebuild — iteration 0 + server logging + SQLite persistence)
+Last updated: 2026-05-31 (grill-with-docs — sharpened positioning: orchestrator-tier, cross-machine, human-steer; dogfood-first)
 
 ---
 
@@ -27,6 +27,10 @@ _Avoid_: Org, Team, Project
 A named occupant of a Room — human or AI agent. The `from` of every message.
 _Avoid_: Participant, User, Agent (as a synonym for occupant)
 
+**Orchestrator**:
+The role most agent Members are expected to play: a planner that speaks for a whole local swarm of implementer agents on its own machine. A usage convention, not a distinct type — an Orchestrator is a Member; not every Member is an Orchestrator (a human Member is not). Quorus connects Orchestrators; the implementer agents behind one are invisible to it.
+_Avoid_: Coordinator, Manager, Lead agent
+
 **Membership**:
 The set of Members that belong to a Room, recorded when they join. Distinct from presence (who is currently active).
 _Avoid_: Roster, Attendance
@@ -43,11 +47,59 @@ _Avoid_: Index, Offset, ID
 The policy governing how long a Room's Messages are kept. Default: indefinite.
 _Avoid_: Expiry, TTL, Cleanup
 
+## Relationships
+
+- A **Room** has many **Members**; a **Member** may belong to many **Rooms**.
+- A **Member** is usually an **Orchestrator** (an agent) or a human; the same Room can hold both.
+- **Hub-to-hub**: each machine runs its own hub-and-spoke swarm (one Orchestrator, many hidden implementers); Quorus connects the *hubs* across machines. Coordination is **between Orchestrators**, not between implementers.
+
+## Example dialogue
+
+> **Aarya:** "When my Orchestrator and Arav's coordinate, do the worker agents join the Room too?"
+> **Arav:** "No — only the Orchestrators are Members. My workers are an internal detail of my hub; yours can't see them. The Room is where the two planners exchange intent, and we humans can sit in it to watch and steer."
+
+## Flagged ambiguities
+
+- "Agent" was used for both *an implementer worker* and *the thing that joins a Room*. Resolved: the thing that joins is a **Member**, and the agent Member we expect is an **Orchestrator**; implementer workers are not Members.
+
+---
+
+## Positioning Hypothesis (unvalidated — dogfood-first)
+
+> Treated as a hypothesis to test by using it ourselves, **not** an enshrined strategy. The
+> "AI agents message each other" niche is currently unvalidated: competitor traction is
+> influencer/blog-driven, not usage-driven (MCP Agent Mail ~2k★ via Steve Yegge amplification;
+> AgentDM is a ~2.5-month landing page with an 11★ top repo and a 6-point Show HN; claude-mesh,
+> cc2cc, session-bridge are dead 1–2-day projects). The one commercial win in "agent
+> communication" (AgentMail, YC S25) solved a *more concrete* problem — email inboxes for agents.
+
+**The bet:** Quorus is a coordination fabric for AI **Orchestrators across machines**. Each
+machine runs its own hub-and-spoke swarm; Quorus connects the *hubs*. The un-taken ground vs.
+every traction-having competitor (all Claude-only and agent-only) is:
+
+1. **Orchestrator-tier** coordination (planners exchanging intent), not flat implementer DMs.
+2. **Humans join Rooms to view and steer** their swarm — the bridge to a future paid dashboard.
+3. **Cross-client** — Claude Code ↔ Cursor ↔ Codex ↔ any MCP client, not Claude-to-Claude only.
+
+**Validation plan:** Aarya + Arav are the target user (two co-founders, two machines, parent-agent
+workflows). Ship the cheapest cross-machine + human-view path, dogfood 1–2 weeks, then reassess
+before investing further. The motivating user story: levelsio asking "why can't Claude Code
+sessions message each other?" while copy-pasting between SSH windows by hand.
+
+**Delivery (v1):** pull / loop — agents call `get_messages` when prompted (a `/loop` or cron does
+the poke). A Channels-style interrupt that wakes an idle agent (`notifications/claude/channel`) is
+a *later, optional per-machine adapter* kept out of the transport-agnostic server core.
+
+**Deferred by this thesis:** advisory leases/locks — Orchestrators on different machines/repos
+don't collide on files, so messaging is the primitive, not mutual exclusion. Revisit only if a
+Room ever spans a shared working tree.
+
 ---
 
 ## Current State
 
-Quorus is the coordination layer for AI agent swarms — real-time Rooms agents join over MCP.
+Quorus is a coordination fabric for AI agent swarms — Rooms that Orchestrators on different
+machines (and the humans steering them) join over MCP.
 
 **This is a from-scratch rebuild.** The 48k-line Python v1 (relay + MCP + CLI + TUI + SDK
 monorepo) was wiped on 2026-05-28 and is being rebuilt in TypeScript from first principles —
@@ -92,12 +144,20 @@ header carrying its Member name. Identity is bound per connection — no tool ta
 
 ## In Progress
 
-Iteration 0 + logging + **persistence (SQLite)** complete. Next iterations, in order:
+Iteration 0 + logging + **persistence (SQLite)** complete. Reordered for **dogfood-first**
+validation of the Positioning Hypothesis (above) — get Aarya + Arav coordinating cross-machine,
+cheaply, before investing further:
 
-1. **Real-time** — `wait` mode on get_messages (long-poll, universal) and/or a Claude Code **Channel** plugin
-2. **Deploy + UX** — Docker + one host, tiny CLI, wire `website/` as read-only dashboard
-3. **Coordination** — shared goal/decisions + distributed locks
-4. **Identity + Rooms** polish (DM auto-naming, `list_rooms` discovery)
+1. **Cheapest cross-machine path** — deploy to one reachable host so two machines' Orchestrators
+   can join the same Room (Docker + one host, a tiny connect helper). The minimum to dogfood.
+2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
+   loop or the `website/` app wired as a read-only dashboard).
+3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
+   interrupt adapter (`notifications/claude/channel`) later, kept out of the server core.
+4. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
+   hold? Only then invest in: Identity/auth, Workspaces, discovery (`list_rooms`), managed quorus.dev.
+
+**Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.
 
 ---
 
@@ -105,6 +165,7 @@ Iteration 0 + logging + **persistence (SQLite)** complete. Next iterations, in o
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
 | 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
 | 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
@@ -135,7 +196,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Streamable HTTP** transport; identity bound per connection via `x-quorus-member`.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
 - **Membership** tracked from iteration 0 (roster only); access control deferred.
-- **Pull-only** delivery in iteration 0; real-time arrives later via a Claude Code Channel.
+- **Pull/loop** delivery for v1; a Channels-style interrupt adapter (`notifications/claude/channel`) is later and kept out of the transport-agnostic server core.
+- **Coordination is between Orchestrators** (hub-to-hub), not between implementer agents; advisory leases/locks deferred — planners on different machines don't collide on files.
+- **Positioning is a hypothesis**, validated by Aarya + Arav dogfooding cross-machine before further investment.
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
 - **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
 - MIT licensed.
