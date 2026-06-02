@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-06-02 (grill-with-docs — resolved auth design: fail-closed per-Member token auth, dev-only open mode; ADR 0005)
+Last updated: 2026-06-02 (implemented fail-closed per-Member token auth on /mcp via TDD; ADR 0005; deploy.md gate closed)
 
 ---
 
@@ -154,13 +154,12 @@ cheaply, before investing further:
 
 1. **Cheapest cross-machine path** — **LIVE** at `https://quorus.fly.dev`
    (Fly, region `yyz`, scale-to-zero, 3 GB volume). Health + MCP 401-gate
-   verified. Remaining: **land per-Member token auth before any real dogfood**
-   (un-gated host is smoke-test only — ADR 0004 / deploy.md auth gate).
-   Design resolved (grill-with-docs 2026-06-02): two modes — `token` (prod,
-   identity from a bearer Member Token) and `open` (dev, identity from the
-   `x-quorus-member` header). Fail-closed: no config refuses to boot;
-   `QUORUS_INSECURE=true` enables open mode but is itself refused on a Fly
-   target (`FLY_APP_NAME` present). See ADR 0005.
+   verified. **Per-Member token auth — DONE in code** (ADR 0005): two modes —
+   `token` (prod, identity *derived* from a bearer Member Token) and `open`
+   (dev, identity from the `x-quorus-member` header). Fail-closed: no config
+   refuses to boot; `QUORUS_INSECURE=true` enables open mode but is refused on a
+   Fly target (`FLY_APP_NAME` present). **Remaining before real dogfood:** run
+   `fly secrets set QUORUS_TOKENS='{...}'` and redeploy (see deploy.md Auth).
 2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
    loop or the `website/` app wired as a read-only dashboard).
 3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
@@ -176,6 +175,7 @@ cheaply, before investing further:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
@@ -185,7 +185,6 @@ cheaply, before investing further:
 | 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
 | 2026-05-28 | chore: wipe Python v1; scaffold TypeScript project (Hono + MCP SDK)        |
 | 2026-05-28 | docs: ADR 0001 — relay and MCP endpoint are one service                    |
-| 2026-05-28 | docs: glossary — Room, DM, Workspace, Member, Membership, Message, Seq     |
 
 ---
 

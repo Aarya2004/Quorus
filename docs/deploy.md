@@ -21,8 +21,9 @@ The live deployment is at `https://quorus.fly.dev/mcp` (health at `/health`).
 
 ## Connecting an agent (Member)
 
-Add the deployed URL as a remote MCP server, with an `x-quorus-member` header
-carrying this Member's name. Example MCP client config:
+Add the deployed URL as a remote MCP server, with an `Authorization: Bearer`
+header carrying this Member's token (see "Auth" below for minting tokens).
+Example MCP client config:
 
 ```json
 {
@@ -30,20 +31,22 @@ carrying this Member's name. Example MCP client config:
     "quorus": {
       "type": "http",
       "url": "https://quorus.fly.dev/mcp",
-      "headers": { "x-quorus-member": "Aarya" }
+      "headers": { "Authorization": "Bearer tk_your_token" }
     }
   }
 }
 ```
 
-Identity is bound per connection — no tool takes a `from`. The member name is
-whatever you put in the header (see the auth gate below).
+Identity is bound per connection — no tool takes a `from`. In token mode the
+Member name is **derived from the token**, not asserted by the client; a
+`x-quorus-member` header is optional and, if sent, must match the token's Member
+or the connection is rejected (ADR 0005).
 
 ## Expected behaviour, not bugs
 
 - **`404 "unknown session"` after the host has been idle.** The machine scales
   to zero; a cold start wipes the in-memory session map. Well-behaved MCP
-  clients re-`initialize` automatically and re-supply identity via the header.
+  clients re-`initialize` automatically and re-supply the bearer token.
   All Rooms/Messages are durable on the volume. See `docs/adr/0004`.
 
 ## Retention
@@ -52,10 +55,26 @@ Messages are kept **indefinitely — bounded by the 3 GB volume**, not by a time
 policy. There is no eviction yet. 3 GB holds far more than any dogfood window;
 resize the volume (`fly volume extend`) if it ever fills.
 
-## ⚠️ Auth gate — do this before real dogfooding
+## Auth
 
-This deploy is **un-gated**: `x-quorus-member` is pure self-assertion, so anyone
-who knows the URL can post as any Member. That is fine for throwaway smoke
-tests, but Member attribution is the core of the product bet. **Add shared
-bearer-token auth on `/mcp` before the first real cross-machine coordination
-session, and do not trust identity in any usage before that.**
+Auth is **fail-closed** (ADR 0005): the server refuses to boot unless a mode is
+configured. In production it runs **token mode** — each Member presents a
+per-Member bearer token, and identity is derived from that token (a shared token
+was rejected: it would leave Member attribution forgeable).
+
+**Set the tokens as a Fly secret** (never in `fly.toml` `[env]`, which is
+committed to git):
+
+```bash
+# Mint a random token per Member, then set the whole map at once.
+fly secrets set QUORUS_TOKENS='{"tk_aarya":"aarya","tk_arav":"arav"}'
+```
+
+`QUORUS_TOKENS` is a JSON object of `{ "<token>": "<member>" }`. Setting a
+secret restarts the machine. **Adding a Member** = re-set the full map (Fly
+replaces the value wholesale) and redeploy; hand the new Member their token.
+Mint tokens with e.g. `openssl rand -hex 16`.
+
+Open mode (no token, identity from `x-quorus-member`) is **dev-only** and is
+refused on the Fly target — `QUORUS_INSECURE=true` causes a boot crash when
+`FLY_APP_NAME` is set, so the deploy can never accidentally run un-gated.
