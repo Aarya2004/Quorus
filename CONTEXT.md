@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-06-02 (implemented fail-closed per-Member token auth on /mcp via TDD; ADR 0005; deploy.md gate closed)
+Last updated: 2026-06-02 (retargeted to OSS-share goal; delivery decision ADR 0006 — manual/poll now, Claude channel later, long-poll rejected; concept validated at YC hackathon)
 
 ---
 
@@ -68,34 +68,36 @@ _Avoid_: Expiry, TTL, Cleanup
 
 ---
 
-## Positioning Hypothesis (unvalidated — dogfood-first)
+## Positioning (open-source project, not a company)
 
-> Treated as a hypothesis to test by using it ourselves, **not** an enshrined strategy. The
-> "AI agents message each other" niche is currently unvalidated: competitor traction is
-> influencer/blog-driven, not usage-driven (MCP Agent Mail ~2k★ via Steve Yegge amplification;
-> AgentDM is a ~2.5-month landing page with an 11★ top repo and a 6-point Show HN; claude-mesh,
-> cc2cc, session-bridge are dead 1–2-day projects). The one commercial win in "agent
-> communication" (AgentMail, YC S25) solved a *more concrete* problem — email inboxes for agents.
+> **Goal (2026-06-02):** Quorus is a **cool, shareable open-source project** — not a
+> company, no paid tier, no managed SaaS, no user-retention metrics. Success = a stranger
+> finds it, clones it, and quickly gets the "two agents coordinate across machines" moment.
+> This replaces the earlier company-validation framing. The competitor context still holds:
+> the "AI agents message each other" niche has no usage-driven traction (MCP Agent Mail
+> ~2k★ via amplification; AgentDM a landing page; claude-mesh/cc2cc/session-bridge dead) —
+> which is fine, because the bar here is "interesting to share," not "win a market."
 
-**The bet:** Quorus is a coordination fabric for AI **Orchestrators across machines**. Each
-machine runs its own hub-and-spoke swarm; Quorus connects the *hubs*. The un-taken ground vs.
-every traction-having competitor (all Claude-only and agent-only) is:
+**The idea:** a coordination fabric for AI **Orchestrators across machines**. Each machine
+runs its own hub-and-spoke swarm; Quorus connects the *hubs*. What makes it worth sharing:
 
 1. **Orchestrator-tier** coordination (planners exchanging intent), not flat implementer DMs.
-2. **Humans join Rooms to view and steer** their swarm — the bridge to a future paid dashboard.
+2. **Humans join Rooms to view and steer** their swarm (a read-only human-view, not a product).
 3. **Cross-client** — Claude Code ↔ Cursor ↔ Codex ↔ any MCP client, not Claude-to-Claude only.
 
-**Validation plan:** Aarya + Arav are the target user (two co-founders, two machines, parent-agent
-workflows). Ship the cheapest cross-machine + human-view path, dogfood 1–2 weeks, then reassess
-before investing further. The motivating user story: levelsio asking "why can't Claude Code
-sessions message each other?" while copy-pasting between SSH windows by hand.
+The motivating user story: levelsio asking "why can't Claude Code sessions message each
+other?" while copy-pasting between SSH windows by hand.
 
-**Delivery (v1):** pull / loop — agents call `get_messages` when prompted (a `/loop` or cron does
-the poke). A Channels-style interrupt that wakes an idle agent (`notifications/claude/channel`) is
-a *later, optional per-machine adapter* kept out of the transport-agnostic server core.
+**Delivery — manual/poll now, Claude channel later (ADR 0006):** agents learn of new
+Messages by polling `get_messages` (human- or `/loop`-driven). This is an accepted
+limitation. We rejected long-poll (`wait` mode) — a held tool call freezes the agent and
+blocks it from returning to the human, worse than instant-return polling. **No portable
+hands-free delivery exists today**: a true idle-wake is Claude-Code-only
+(`notifications/claude/channel`), a buggy research preview — deferred as the *ideal* later
+experience, kept an optional layer over the portable poll core.
 
-**Deferred by this thesis:** advisory leases/locks — Orchestrators on different machines/repos
-don't collide on files, so messaging is the primitive, not mutual exclusion. Revisit only if a
+**Deferred:** advisory leases/locks — Orchestrators on different machines/repos don't
+collide on files, so messaging is the primitive, not mutual exclusion. Revisit only if a
 Room ever spans a shared working tree.
 
 ---
@@ -148,22 +150,25 @@ header carrying its Member name. Identity is bound per connection — no tool ta
 
 ## In Progress
 
-Iteration 0 + logging + **persistence (SQLite)** complete. Reordered for **dogfood-first**
-validation of the Positioning Hypothesis (above) — get Aarya + Arav coordinating cross-machine,
-cheaply, before investing further:
+Iteration 0 + logging + **persistence (SQLite)** + **per-Member token auth** complete.
+**The concept is validated** — an earlier (pre-auth) build coordinated cross-machine at a
+YC hackathon and worked. So the bet is proven enough to be worth sharing; the goal now is a
+polished, shareable OSS project (see Positioning). Roadmap:
 
-1. **Cheapest cross-machine path** — **LIVE** at `https://quorus.fly.dev`
-   (Fly, region `yyz`, scale-to-zero, 3 GB volume). Health + MCP 401-gate
-   verified. **Per-Member token auth — DONE in code** (ADR 0005): two modes —
-   `token` (prod, identity *derived* from a bearer Member Token) and `open`
-   (dev, identity from the `x-quorus-member` header). Fail-closed: no config
-   refuses to boot; `QUORUS_INSECURE=true` enables open mode but is refused on a
-   Fly target (`FLY_APP_NAME` present). **Remaining before real dogfood:** run
-   `fly secrets set QUORUS_TOKENS='{...}'` and redeploy (see deploy.md Auth).
-2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
-   loop or the `website/` app wired as a read-only dashboard).
-3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
-   interrupt adapter (`notifications/claude/channel`) later, kept out of the server core.
+1. **Confirm the auth'd build live** — *only unverified piece.* The hackathon ran the
+   **pre-auth** build; today's stack (SQLite + token auth) has never run with auth on the
+   live host. Auth is DONE in code (ADR 0005) but `QUORUS_TOKENS` isn't set on the deploy,
+   so it can't run token-mode yet. **Next step:** `fly secrets set QUORUS_TOKENS='{...}'`,
+   redeploy, and run two machines to confirm it still coordinates like the hackathon build
+   did (see deploy.md Auth).
+2. **Human view** — a read-only way for a human to watch a Room (the shareable artifact: a
+   screenshot/video of agents talking). Start simple: a `get_messages` tail, or the
+   `website/` app wired as a read-only dashboard. Do *after* step 1.
+3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
+   demo, so a stranger gets the moment fast.
+4. **Delivery (deferred, ADR 0006)** — stays manual/poll. Long-poll rejected (freezes the
+   agent). Claude `claude/channel` wake is the ideal later experience but Claude-only +
+   buggy; revisit when it stabilises. No portable hands-free delivery exists today.
 4. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
    hold? Only then invest in: Identity/auth, Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
@@ -175,6 +180,7 @@ cheaply, before investing further:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
@@ -184,7 +190,6 @@ cheaply, before investing further:
 | 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
 | 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
 | 2026-05-28 | chore: wipe Python v1; scaffold TypeScript project (Hono + MCP SDK)        |
-| 2026-05-28 | docs: ADR 0001 — relay and MCP endpoint are one service                    |
 
 ---
 
@@ -208,9 +213,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Streamable HTTP** transport; identity bound per connection via `x-quorus-member`.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
 - **Membership** tracked from iteration 0 (roster only); access control deferred.
-- **Pull/loop** delivery for v1; a Channels-style interrupt adapter (`notifications/claude/channel`) is later and kept out of the transport-agnostic server core.
+- **Delivery is manual/poll** (ADR 0006). **Long-poll rejected** — a held tool call freezes the agent and blocks it from returning to the human. True idle-wake is Claude-only (`claude/channel`) + buggy; deferred as the ideal-later layer. No portable hands-free delivery exists today.
 - **Coordination is between Orchestrators** (hub-to-hub), not between implementer agents; advisory leases/locks deferred — planners on different machines don't collide on files.
-- **Positioning is a hypothesis**, validated by Aarya + Arav dogfooding cross-machine before further investment.
+- **Goal is a shareable OSS project**, not a company — no paid tier / managed SaaS. The concept was validated at a YC hackathon (pre-auth build); the bar now is "interesting to share," not "win a market."
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
 - **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
 - **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
