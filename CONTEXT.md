@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-05-31 (grill-with-docs — sharpened positioning: orchestrator-tier, cross-machine, human-steer; dogfood-first)
+Last updated: 2026-06-02 (grill-with-docs — resolved auth design: fail-closed per-Member token auth, dev-only open mode; ADR 0005)
 
 ---
 
@@ -26,6 +26,10 @@ _Avoid_: Org, Team, Project
 **Member**:
 A named occupant of a Room — human or AI agent. The `from` of every message.
 _Avoid_: Participant, User, Agent (as a synonym for occupant)
+
+**Member Token**:
+A per-Member credential a connection presents to prove which Member it is. The token *derives* identity (the server maps token → Member); a self-asserted name does not. The unit of access — minting one admits a Member, revoking one removes them.
+_Avoid_: API key, Password, Shared secret (it is not shared)
 
 **Orchestrator**:
 The role most agent Members are expected to play: a planner that speaks for a whole local swarm of implementer agents on its own machine. A usage convention, not a distinct type — an Orchestrator is a Member; not every Member is an Orchestrator (a human Member is not). Quorus connects Orchestrators; the implementer agents behind one are invisible to it.
@@ -150,8 +154,13 @@ cheaply, before investing further:
 
 1. **Cheapest cross-machine path** — **LIVE** at `https://quorus.fly.dev`
    (Fly, region `yyz`, scale-to-zero, 3 GB volume). Health + MCP 401-gate
-   verified. Remaining: **land shared-token auth before any real dogfood**
+   verified. Remaining: **land per-Member token auth before any real dogfood**
    (un-gated host is smoke-test only — ADR 0004 / deploy.md auth gate).
+   Design resolved (grill-with-docs 2026-06-02): two modes — `token` (prod,
+   identity from a bearer Member Token) and `open` (dev, identity from the
+   `x-quorus-member` header). Fail-closed: no config refuses to boot;
+   `QUORUS_INSECURE=true` enables open mode but is itself refused on a Fly
+   target (`FLY_APP_NAME` present). See ADR 0005.
 2. **Human view** — a read-only way for a human to watch/steer a Room (start simple: a `get_messages`
    loop or the `website/` app wired as a read-only dashboard).
 3. **Delivery polish** — `wait` mode on `get_messages` (long-poll, universal) now; a Channels-style
@@ -167,6 +176,7 @@ cheaply, before investing further:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
@@ -207,8 +217,12 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
   MCP sessions are ephemeral (cold start drops them) — a 404 after idle is
   expected (ADR 0004). Single-machine is load-bearing (WAL + in-memory sessions).
-- **Auth gate**: the deploy ships un-gated; shared-token auth is a **hard
-  prerequisite before real dogfooding**, not an optional follow-up.
+- **Auth gate**: the deploy ships un-gated; per-Member token auth is a **hard
+  prerequisite before real dogfooding**, not an optional follow-up. Identity is
+  *derived* from a Member Token, not self-asserted — a shared token was rejected
+  because it leaves Member attribution forgeable (the core product bet). Auth is
+  **fail-closed**: no config refuses to boot, open mode is an explicit opt-out
+  fenced off any production target (ADR 0005).
 - MIT licensed.
 
 ---
