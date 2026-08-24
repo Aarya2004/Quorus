@@ -1,3 +1,7 @@
+---
+status: accepted
+---
+
 # Relay and MCP endpoint are one service
 
 Quorus runs as a single remote server that speaks MCP over Streamable HTTP and owns the

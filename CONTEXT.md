@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-06-02 (retargeted to OSS-share goal; delivery decision ADR 0006 — manual/poll now, Claude channel later, long-poll rejected; concept validated at YC hackathon)
+Last updated: 2026-08-24 (resumed after ~12-week pause; full doc staleness refresh + new **Landscape** section — MCP spec 2026-07-28 / SDK v2, Claude Channels status, competitor scan)
 
 ---
 
@@ -77,6 +77,8 @@ _Avoid_: Expiry, TTL, Cleanup
 > the "AI agents message each other" niche has no usage-driven traction (MCP Agent Mail
 > ~2k★ via amplification; AgentDM a landing page; claude-mesh/cc2cc/session-bridge dead) —
 > which is fine, because the bar here is "interesting to share," not "win a market."
+> *(Competitor picture refreshed 2026-08-24 — several of those projects are now active and a
+> near-identical "Rooms" competitor exists; see **Landscape** below.)*
 
 **The idea:** a coordination fabric for AI **Orchestrators across machines**. Each machine
 runs its own hub-and-spoke swarm; Quorus connects the *hubs*. What makes it worth sharing:
@@ -102,6 +104,39 @@ Room ever spans a shared working tree.
 
 ---
 
+## Landscape (checked 2026-08-24)
+
+What changed in the world during the June→August pause. Verified against primary sources
+(modelcontextprotocol.io changelog, SDK migration docs, code.claude.com, the GitHub issues).
+
+- **MCP spec 2026-07-28** — the largest revision since launch, and it removes what Quorus is
+  built on: protocol sessions (`Mcp-Session-Id`) and the `initialize` handshake are **gone**
+  from Streamable HTTP. Identity-per-connection must become explicit server-minted handles
+  passed as ordinary tool arguments (fits the Member-Token model well). New
+  `subscriptions/listen` provides a sanctioned server→client push stream — a future delivery
+  path beyond polling — and an official Tasks extension covers long-running waits.
+- **TypeScript SDK v2** — the monolithic `@modelcontextprotocol/sdk` is split into
+  `@modelcontextprotocol/server` / `client` / `core` plus adapters, including an **official
+  Hono adapter** (likely supersedes `@hono/mcp`). Requires zod ^4 (we already are). A codemod
+  exists; v1 is supported ~6 more months and interoperates with v2 clients — no fire drill,
+  but new work is pointed at v2. → now a roadmap item.
+- **Claude Channels** — `claude/channel` is now a documented research preview (incl.
+  permission relay), but the **idle-wake bug is still open**
+  (anthropics/claude-code#44380): messages queue until the agent's next turn instead of
+  waking it. ADR 0006's manual/poll decision stands unchanged.
+- **Competitors woke up** — **ExaDev/agent-comms** ("Rooms, DMs, presence — cross-harness")
+  is a near-verbatim Quorus pitch; **claude-mesh** revived as relay + channels + permission
+  relay; **MCP Agent Mail** added cross-project contact handshakes; **AgentDM** is hosted and
+  speaks MCP + A2A. **A2A** hit v1.0.1 (150+ orgs) and moved into a new Agentic AI Foundation
+  (2026-08-17); consensus: MCP for agent↔tools, A2A for enterprise peer agents. Cross-machine,
+  human-observable Rooms over plain MCP is still an open slice — but first-run polish is now
+  urgent, not optional.
+- **Stack/infra** — Node 24.19 LTS current; `node:sqlite` still Release Candidate (fine as-is);
+  Hono still v4. Fly.io moved to pure pay-as-you-go: scale-to-zero stops compute billing but
+  the 3 GB volume bills continuously (a few $/mo floor).
+
+---
+
 ## Current State
 
 Quorus is a coordination fabric for AI agent swarms — Rooms that Orchestrators on different
@@ -109,14 +144,15 @@ machines (and the humans steering them) join over MCP.
 
 **This is a from-scratch rebuild.** The 48k-line Python v1 (relay + MCP + CLI + TUI + SDK
 monorepo) was wiped on 2026-05-28 and is being rebuilt in TypeScript from first principles —
-same idea, far simpler, genuinely deployable. The v1 code remains in git history and on `main`.
+same idea, far simpler, genuinely deployable. `main` **is** the rebuild; the v1 code remains
+only in git history (commits before `088cfc2`).
 
-**Branch:** `claude/continuation-LXpY5`
+**Branch:** `main`
 
-**Iteration 0 — "the Room" — DONE (19 tests passing).** A single remote server speaks MCP over
+**Iteration 0 — "the Room" — DONE (48 tests passing).** A single remote server speaks MCP over
 Streamable HTTP; agents on any machine connect by pointing their MCP client at the URL. The store
-is an append-only JSONL file per Room, behind a `Store` seam so later iterations can swap in
-SQLite/Redis untouched.
+is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is kept as
+the zero-config dev alternative, and both must pass one shared contract suite.
 
 **Tools (5):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`.
 
@@ -129,22 +165,37 @@ src/
   store/sqlite-store.ts  # SQLite store (node:sqlite) — the server default
   store/jsonl-store.ts   # append-only JSONL store — zero-config dev alternative
   store/store-contract.ts# shared behavioural suite both stores must pass
+  config.ts              # fail-closed auth config loader (ADR 0005)
   log.ts                 # tiny structured logger (level-gated, greppable)
+  suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
   server/tools.ts        # builds an MCP server with the 5 tools, identity bound per connection
-  server/app.ts          # Hono app: /mcp (Streamable HTTP) + /health
-  index.ts               # bootstrap: SqliteStore + serve
-website/                 # retained Vite+React app — future read-only dashboard
-docs/adr/                # architecture decision records
+  server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
+  index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
+  *.test.ts              # 48 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e
+website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
+                         #   future read-only dashboard. Has a manual Vercel deploy workflow —
+                         #   do not dispatch it until the content is rewritten.
+docs/adr/                # architecture decision records (0001–0006)
+docs/deploy.md           # Fly deploy + auth runbook
+Dockerfile, fly.toml     # container + single Fly machine, volume at /data
+.env.example             # QUORUS_TOKENS / QUORUS_INSECURE
 ```
 
 **Stack:** TypeScript / Node ≥22.13 (24 LTS), `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`,
-zod, `node:sqlite`, Vitest, Biome, npm.
+zod, `node:sqlite`, Vitest, Biome, esbuild (build) + tsx (dev). Package manager: **Bun**
+(`bun install`); runtime stays Node. (`website/` is separately npm-managed.)
 
 **Run:** `npm test` · `npm run typecheck` · `npm run lint` · `npm run dev` (server on `:8787`,
-SQLite at `./data/quorus.db`).
+SQLite at `./data/quorus.db`; `dev` sets `QUORUS_INSECURE=true` — open auth mode) ·
+`npm run build` (esbuild bundle, used by the Dockerfile).
 
-**How an agent connects:** add the server URL as a remote MCP server with an `x-quorus-member`
-header carrying its Member name. Identity is bound per connection — no tool takes a `from` arg.
+**Env vars:** `QUORUS_TOKENS` / `QUORUS_INSECURE` (auth, ADR 0005) · `QUORUS_DB_PATH` (SQLite
+file) · `QUORUS_DATA_DIR` (JSONL dir) · `QUORUS_LOG_LEVEL` · `PORT`.
+
+**How an agent connects:** add the server URL as a remote MCP server. Local dev (open mode):
+an `x-quorus-member` header carries the Member name. Deployed (token mode): `Authorization:
+Bearer <member-token>` — identity is *derived* from the token, and a contradicting member
+header is rejected. Either way identity is bound per connection — no tool takes a `from` arg.
 
 ---
 
@@ -153,7 +204,9 @@ header carrying its Member name. Identity is bound per connection — no tool ta
 Iteration 0 + logging + **persistence (SQLite)** + **per-Member token auth** complete.
 **The concept is validated** — an earlier (pre-auth) build coordinated cross-machine at a
 YC hackathon and worked. So the bet is proven enough to be worth sharing; the goal now is a
-polished, shareable OSS project (see Positioning). Roadmap:
+polished, shareable OSS project (see Positioning). *Work paused 2026-06-02 → resumed
+2026-08-24 (docs refreshed; local stack smoke-tested end-to-end: session → create_room →
+send → poll all work).* Roadmap:
 
 1. **Confirm the auth'd build live** — *only unverified piece.* The hackathon ran the
    **pre-auth** build; today's stack (SQLite + token auth) has never run with auth on the
@@ -163,16 +216,26 @@ polished, shareable OSS project (see Positioning). Roadmap:
    did (see deploy.md Auth).
 2. **Human view** — a read-only way for a human to watch a Room (the shareable artifact: a
    screenshot/video of agents talking). Start simple: a `get_messages` tail, or the
-   `website/` app wired as a read-only dashboard. Do *after* step 1.
+   `website/` app wired as a read-only dashboard (its content is still v1-stale — see repo
+   layout note). Do *after* step 1.
 3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
-   demo, so a stranger gets the moment fast.
-4. **Delivery (deferred, ADR 0006)** — stays manual/poll. Long-poll rejected (freezes the
-   agent). Claude `claude/channel` wake is the ideal later experience but Claude-only +
-   buggy; revisit when it stabilises. No portable hands-free delivery exists today.
-4. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
-   hold? Only then invest in: Identity/auth, Workspaces, discovery (`list_rooms`), managed quorus.dev.
+   demo, so a stranger gets the moment fast. *Urgency up: a near-identical competitor
+   (ExaDev/agent-comms) now exists — see Landscape.*
+4. **MCP 2026-07-28 / SDK v2 migration (new, from Landscape)** — spec removed protocol
+   sessions, so identity-per-connection must become explicit handles; `subscriptions/listen`
+   could upgrade delivery from polling at the same time. v1 interoperates for ~6 months —
+   plan, don't panic.
+5. **Delivery (deferred, ADR 0006)** — stays manual/poll. Long-poll rejected (freezes the
+   agent). Claude Channels wake is the ideal later experience but still Claude-only + idle-wake
+   bug open (claude-code#44380); revisit when it stabilises — or via `subscriptions/listen`
+   after the SDK v2 migration.
+6. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
+   hold? Only then invest in: Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
 **Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.
+
+**Known wart:** `hono-rate-limiter` is a production dependency but is never imported —
+remove it or implement rate limiting deliberately.
 
 ---
 
@@ -180,6 +243,7 @@ polished, shareable OSS project (see Positioning). Roadmap:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
 | 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
@@ -189,7 +253,6 @@ polished, shareable OSS project (see Positioning). Roadmap:
 | 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
 | 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
 | 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
-| 2026-05-28 | chore: wipe Python v1; scaffold TypeScript project (Hono + MCP SDK)        |
 
 ---
 
@@ -198,6 +261,7 @@ polished, shareable OSS project (see Positioning). Roadmap:
 ```
 Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶  Quorus server  (one deployable service)
+                                          ├─ auth   — Bearer token → Member (fail-closed, ADR 0005)
                                           ├─ /mcp   — 5 tools, identity per connection
                                           └─ Store  — SQLite (default) or JSONL; Postgres/Redis later
 ```
@@ -221,12 +285,12 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
   MCP sessions are ephemeral (cold start drops them) — a 404 after idle is
   expected (ADR 0004). Single-machine is load-bearing (WAL + in-memory sessions).
-- **Auth gate**: the deploy ships un-gated; per-Member token auth is a **hard
-  prerequisite before real dogfooding**, not an optional follow-up. Identity is
-  *derived* from a Member Token, not self-asserted — a shared token was rejected
-  because it leaves Member attribution forgeable (the core product bet). Auth is
-  **fail-closed**: no config refuses to boot, open mode is an explicit opt-out
-  fenced off any production target (ADR 0005).
+- **Auth is implemented and fail-closed** (ADR 0005, landed 2026-06-02): identity is
+  *derived* from a per-Member Token, not self-asserted — a shared token was rejected
+  because it leaves Member attribution forgeable (the core product bet). No config
+  refuses to boot; open mode is an explicit `QUORUS_INSECURE=true` opt-out, fenced
+  off any production target by two tripwires (`FLY_APP_NAME`, `NODE_ENV=production` —
+  the Docker image sets the latter). Remaining: set `QUORUS_TOKENS` on the deploy.
 - MIT licensed.
 
 ---

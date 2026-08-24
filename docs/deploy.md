@@ -10,6 +10,9 @@ fly launch --no-deploy          # generate/confirm the app; keep our fly.toml
 # The volume's region MUST match fly.toml's primary_region (yyz), or the
 # machine won't launch ("needs an unattached volume in region ...").
 fly volume create quorus_data --size 3 --region yyz   # 3 GB volume for SQLite
+# REQUIRED before the first deploy: auth is fail-closed (ADR 0005) — the server
+# refuses to boot on Fly without this secret, and the machine will crash-loop.
+fly secrets set QUORUS_TOKENS='{"<token>":"<member>"}'
 fly deploy
 ```
 
@@ -62,8 +65,8 @@ configured. In production it runs **token mode** — each Member presents a
 per-Member bearer token, and identity is derived from that token (a shared token
 was rejected: it would leave Member attribution forgeable).
 
-**Set the tokens as a Fly secret** (never in `fly.toml` `[env]`, which is
-committed to git):
+**The tokens live in the `QUORUS_TOKENS` Fly secret** (set during first-time
+setup above — never in `fly.toml` `[env]`, which is committed to git):
 
 ```bash
 # Mint a random token per Member, then set the whole map at once.
@@ -77,4 +80,6 @@ Mint tokens with e.g. `openssl rand -hex 16`.
 
 Open mode (no token, identity from `x-quorus-member`) is **dev-only** and is
 refused on the Fly target — `QUORUS_INSECURE=true` causes a boot crash when
-`FLY_APP_NAME` is set, so the deploy can never accidentally run un-gated.
+`FLY_APP_NAME` is set **or** `NODE_ENV=production` — and the Dockerfile sets
+`NODE_ENV=production`, so the container image refuses open mode even off Fly.
+The deploy can never accidentally run un-gated.

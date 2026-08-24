@@ -1,5 +1,11 @@
 # Fly.io Deploy Path Implementation Plan
 
+> **COMPLETED 2026-05-31** — all tasks shipped in commits f6b7a47..957aa94.
+> Historical record; checkboxes left unticked. Corrections since: region
+> iad→yyz (39136db); the inline copies of `deploy.md` and ADR 0004 below are
+> point-in-time snapshots — see the committed files, and note the auth approach
+> here was superseded by ADR 0005.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Containerize the Quorus server and add Fly.io config so two machines can join the same Room over a public URL, unblocking cross-machine dogfooding.

@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Quorus website
 
-## Getting Started
+Marketing/landing SPA for Quorus, built with **Vite + React 18 + Tailwind +
+framer-motion**. Routes: `/` (landing) and `/console`.
 
-First, run the development server:
+Uses **npm** (it has its own `package-lock.json`) — not Bun, unlike the repo root.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # Vite dev server, default port 5173
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## WARNING: site content is STALE
 
-## Learn More
+The site markets the **deleted Python v1**, not the current TypeScript rebuild:
 
-To learn more about Next.js, take a look at the following resources:
+- A `pipx` install command (v1 was Python; the rebuild is a remote MCP server).
+- "11 MCP tools" — the real count is **5**.
+- "v0.4" / "OPEN BETA" badges.
+- `Quorus-dev/Quorus` repo URLs — the real repo is `Aarya2004/Quorus`.
+- `relay.quorus.dev` host — the real host is `quorus.fly.dev`.
+- `/console` speaks the deleted v1 REST API, not MCP.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A rewrite is pending — the roadmap intent is a read-only Room dashboard. Do not
+trust product claims in components until then.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+There is a manual-dispatch Vercel deploy workflow at
+`.github/workflows/deploy-vercel.yml`. **Do not run it** until the content is
+rewritten.

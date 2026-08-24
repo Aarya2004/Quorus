@@ -4,16 +4,17 @@ status: accepted
 
 # Fail-closed per-Member token auth, with a dev-only open mode
 
-The Fly deploy ships un-gated: `x-quorus-member` is self-asserted, so anyone with
-the URL can post as any Member (ADR 0004 / `docs/deploy.md` auth gate). Before any
-real dogfood we gate `/mcp`. We chose **per-Member bearer tokens** that *derive*
+At the time of writing, the Fly deploy shipped un-gated: `x-quorus-member` was
+self-asserted, so anyone with the URL could post as any Member (ADR 0004 /
+`docs/deploy.md` auth gate). Before any real dogfood we gate `/mcp`. (Status:
+implemented the same day — commits cbcaf4c…db88a11, 2026-06-02.) We chose **per-Member bearer tokens** that *derive*
 identity, defaulting **fail-closed**, with an explicit **open mode** for local dev
 that is structurally forbidden on a production target.
 
 ## Decision
 
-Two auth modes, resolved once at startup by `src/config.ts` (zod-validated, fails
-fast, logs the resolved mode):
+Two auth modes, resolved once at startup by `src/config.ts` (fails fast; the
+resolved mode is logged at boot from `src/index.ts`):
 
 - **`token` (production).** The request carries `Authorization: Bearer <token>`.
   The server maps the token to a Member via the `QUORUS_TOKENS` secret (a JSON

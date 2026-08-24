@@ -16,8 +16,10 @@ Accept ephemeral sessions for the dogfooding phase. The cost is occasional
 reconnect noise; the benefit is a near-free host.
 
 This is viable because Quorus sessions are **nearly stateless** — a session
-holds only the Member name bound from the `x-quorus-member` header. On a 404 a
-client re-`initialize`s, re-supplies the header, and continues; all Rooms,
+holds only the Member name bound from the connection's credential: the Bearer
+token in token mode, the `x-quorus-member` header in open/dev mode (ADR 0005).
+On a 404 a client re-`initialize`s, re-supplies the credential, and continues;
+all Rooms,
 Membership, and Messages are durable on the SQLite volume. Identity survives the
 reconnect.
 
@@ -39,4 +41,5 @@ reconnect.
   single poll cycle after a cold start.
 - **Revisit before public/alpha hosting.** Under real load, scale-to-zero +
   ephemeral sessions stops being acceptable; move to durable sessions or an
-  always-warm machine, and pair it with the auth gate (also a pre-alpha task).
+  always-warm machine. (The auth gate has since landed — ADR 0005, 2026-06-02;
+  durable sessions remain open.)

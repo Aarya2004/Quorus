@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Coordinate between Orchestrators, not implementers (hub-to-hub)
@@ -44,8 +44,10 @@ peer-to-peer DMs **between implementers**. We chose the planner tier instead.
 - `Member` stays the general type; **Orchestrator is a usage convention**, not enforced in code.
   A future reader seeing flat `Member` records should not "fix" Quorus into a flat-DM tool — the
   orchestrator framing is intentional.
-- This is a **hypothesis to validate by dogfooding** (Aarya + Arav, two machines), not a settled
-  architecture — hence `status: proposed`. Promote to `accepted` if dogfooding confirms the bet;
-  otherwise revisit. See the Positioning Hypothesis in `CONTEXT.md`.
+- This began as a **hypothesis to validate by dogfooding** (Aarya + Arav, two machines), with a
+  note to promote to `accepted` if dogfooding confirmed the bet. It did: the bet was validated
+  cross-machine at a YC hackathon with the pre-auth build (2026-06) — hence `status: accepted`.
+  Delivery mechanics are covered in more detail by ADR 0006. See the Positioning Hypothesis in
+  `CONTEXT.md`.
 - Delivery is pull/loop for v1; a Channels-style interrupt adapter
   (`notifications/claude/channel`) is later and kept out of the transport-agnostic server core.

@@ -1,5 +1,10 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Agent guidance — website/
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+- This is a **Vite + React 18 SPA — NOT Next.js** (an old boilerplate file once
+  claimed otherwise). Entry: `website/index.html` → `src/main.tsx`.
+- **npm-managed** with its own `package-lock.json` — do not use Bun here, unlike
+  the repo root.
+- Styling/animation: Tailwind + framer-motion.
+- **Content is currently stale** — it markets the deleted Python v1. See the
+  warning in `website/README.md` before trusting any product claims in
+  components.

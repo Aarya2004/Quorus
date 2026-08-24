@@ -1,8 +1,14 @@
 # Design: Dockerfile + Fly.io deploy path
 
 Date: 2026-05-31
-Status: approved (brainstorming → spec)
+Status: implemented (2026-05-31)
 Branch: `claude/continuation-LXpY5`
+
+> **Historical note.** The shared-bearer-token auth decision in this spec was
+> SUPERSEDED by ADR 0005 (per-Member tokens; a shared token was rejected because
+> it makes Member attribution forgeable). The branch named above no longer exists
+> (work merged to `main`); the region was later pinned to yyz (commit 39136db);
+> the test count was 36 at time of writing (now 48).
 
 ## Goal
 
