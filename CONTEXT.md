@@ -208,12 +208,16 @@ polished, shareable OSS project (see Positioning). *Work paused 2026-06-02 → r
 2026-08-24 (docs refreshed; local stack smoke-tested end-to-end: session → create_room →
 send → poll all work).* Roadmap:
 
-1. **Confirm the auth'd build live** — *only unverified piece.* The hackathon ran the
-   **pre-auth** build; today's stack (SQLite + token auth) has never run with auth on the
-   live host. Auth is DONE in code (ADR 0005) but `QUORUS_TOKENS` isn't set on the deploy,
-   so it can't run token-mode yet. **Next step:** `fly secrets set QUORUS_TOKENS='{...}'`,
-   redeploy, and run two machines to confirm it still coordinates like the hackathon build
-   did (see deploy.md Auth).
+1. **Confirm the auth'd build live** — *mostly done via self-host (2026-08-24).* A 24/7
+   dogfood deploy now runs as a Docker container (`--restart unless-stopped`, named volume
+   at `/data`) on Aarya's WSL box `aarya-desktop`, reachable over Tailscale at
+   `100.69.22.8:8787`. Token mode verified over the tailnet: bad token → 401, valid token
+   with contradicting `x-quorus-member` → 401, valid token → session; Room
+   `r_6d8ea3db436df3ef` ("wsl-mac-bridge") seeded. Tokens live in the gitignored `.env`
+   (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Remaining:** a second machine (the
+   Mac) joins and exchanges Messages — then the cross-machine moment is re-proven with
+   auth on. The Fly deploy still has no `QUORUS_TOKENS` set; decide whether it stays the
+   shareable URL or gets retired in favour of self-host.
 2. **Human view** — a read-only way for a human to watch a Room (the shareable artifact: a
    screenshot/video of agents talking). Start simple: a `get_messages` tail, or the
    `website/` app wired as a read-only dashboard (its content is still v1-stale — see repo
@@ -243,6 +247,7 @@ remove it or implement rate limiting deliberately.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 | 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
 | 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
@@ -252,7 +257,6 @@ remove it or implement rate limiting deliberately.
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
 | 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
 | 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
-| 2026-05-28 | feat: iteration 0 — MCP server (5 tools) over Streamable HTTP, JSONL store |
 
 ---
 
