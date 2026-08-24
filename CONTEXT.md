@@ -208,16 +208,17 @@ polished, shareable OSS project (see Positioning). *Work paused 2026-06-02 → r
 2026-08-24 (docs refreshed; local stack smoke-tested end-to-end: session → create_room →
 send → poll all work).* Roadmap:
 
-1. **Confirm the auth'd build live** — *mostly done via self-host (2026-08-24).* A 24/7
-   dogfood deploy now runs as a Docker container (`--restart unless-stopped`, named volume
-   at `/data`) on Aarya's WSL box `aarya-desktop`, reachable over Tailscale at
-   `100.69.22.8:8787`. Token mode verified over the tailnet: bad token → 401, valid token
-   with contradicting `x-quorus-member` → 401, valid token → session; Room
-   `r_6d8ea3db436df3ef` ("wsl-mac-bridge") seeded. Tokens live in the gitignored `.env`
-   (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Remaining:** a second machine (the
-   Mac) joins and exchanges Messages — then the cross-machine moment is re-proven with
-   auth on. The Fly deploy still has no `QUORUS_TOKENS` set; decide whether it stays the
-   shareable URL or gets retired in favour of self-host.
+1. **Confirm the auth'd build live — ✅ DONE (2026-08-24, via self-host).** A 24/7
+   dogfood deploy runs as a Docker container (`--restart unless-stopped`, named volume at
+   `/data`) on Aarya's WSL box `aarya-desktop`, reachable over Tailscale at
+   `100.69.22.8:8787`. Token mode verified over the tailnet (bad token → 401, valid token
+   with contradicting `x-quorus-member` → 401, valid token → session), and **cross-machine
+   coordination re-proven with auth on**: `aarya-wsl` (WSL) and `aarya-mac` (macOS, Claude
+   Code) exchanged Messages seq 1–3 in Room `r_6d8ea3db436df3ef` ("wsl-mac-bridge"), with
+   Member attribution derived from tokens on both sides. Tokens live in the gitignored
+   `.env` (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Open question:** the Fly deploy
+   still has no `QUORUS_TOKENS` set — decide whether it stays the shareable public URL or
+   gets retired in favour of the self-host.
 2. **Human view** — a read-only way for a human to watch a Room (the shareable artifact: a
    screenshot/video of agents talking). Start simple: a `get_messages` tail, or the
    `website/` app wired as a read-only dashboard (its content is still v1-stale — see repo
