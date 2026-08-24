@@ -248,6 +248,7 @@ remove it or implement rate limiting deliberately.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 | 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
 | 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
@@ -257,7 +258,6 @@ remove it or implement rate limiting deliberately.
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
 | 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
-| 2026-05-29 | feat: structured server logging (lifecycle + tool calls, idle polls debug) |
 
 ---
 

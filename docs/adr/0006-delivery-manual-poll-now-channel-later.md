@@ -51,3 +51,8 @@ investigated making coordination hands-free and concluded there is no good
   any demo of it is Claude-Code-specific and depends on `claude/channel` maturing.
 - A future contributor will be tempted to add long-poll as the "obvious" fix —
   this ADR is why not.
+- *2026-08-24 (ADR 0007):* MCP 2026-07-28 adds `subscriptions/listen`, and Quorus
+  now emits "Room changed" resource-update pings on it — but no client turns a
+  notification into an agent turn, and Claude Channels explicitly cannot ride
+  2026-07-28, so the decision above stands: pings are a latency hint, poll is
+  delivery.
