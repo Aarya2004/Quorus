@@ -23,9 +23,9 @@ exchange messages. (Advisory locks deferred — ADR 0003.)
 > TypeScript from first principles. See `CONTEXT.md` for current state and iteration plan.
 
 **Stack:** TypeScript / Node ≥22.13 (24 LTS; `node:sqlite` needs it),
-`@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`, zod, `node:sqlite`,
-Vitest, Biome, esbuild (build), tsx (dev runtime). Package manager: **Bun**
-(`bun install`); runtime stays Node.
+`@modelcontextprotocol/server` (SDK v2 — Streamable HTTP, spec 2026-07-28 with stateless
+legacy fallback, ADR 0007), Hono, zod, `node:sqlite`, Vitest, Biome, esbuild (build),
+tsx (dev runtime). Package manager: **Bun** (`bun install`); runtime stays Node.
 
 **Run tests:** `npm test`
 **Typecheck:** `npm run typecheck`
@@ -43,8 +43,8 @@ Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶ Quorus server (one service: /mcp + Store)
 ```
 
-- `src/server/app.ts` — Hono app: `/mcp` (Streamable HTTP) + `/health`.
-- `src/server/tools.ts` — MCP server with the 5 tools; identity bound per connection.
+- `src/server/app.ts` — Hono app: `/mcp` (auth + Streamable HTTP) + `/health`.
+- `src/server/tools.ts` — MCP server factory: the 5 tools + Room resource; identity bound per request (ADR 0007).
 - `src/store/` — `Store` interface + SQLite (default) and JSONL implementations (the persistence seam).
 - `src/domain/types.ts` — Room, Member, Message, Seq, errors, limits.
 - `src/config.ts` — fail-closed auth config loader (ADR 0005).

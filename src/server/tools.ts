@@ -1,9 +1,12 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
+
+/** The URI under which a Room is exposed as a subscribable MCP resource. */
+export const roomUri = (roomId: string): string => `quorus://room/${roomId}`;
 
 function ok(text: string, structured?: Record<string, unknown>): CallToolResult {
   return structured
@@ -67,14 +70,25 @@ function logged<A>(
 }
 
 /**
- * Build an MCP server whose tools act as `member`. Identity is bound here, at
- * connection time, so the tools themselves never take a `from` argument and a
- * Member cannot spoof its name mid-session.
+ * Build an MCP server whose tools act as `member`. The factory in `app.ts`
+ * calls this once per HTTP request (spec 2026-07-28 is stateless), with
+ * `member` resolved from that request's credential — so the tools never take
+ * a `from` argument and a Member cannot spoof its name (ADR 0005/0007).
+ *
+ * `onRoomChanged` is invoked after a Message is appended so the app can
+ * publish a `notifications/resources/updated` ping for the Room's resource
+ * URI to any `subscriptions/listen` stream — a latency hint only; delivery
+ * truth stays the `get_messages` seq cursor (ADR 0006/0007).
  */
-export function createMcpServer(store: Store, member: string): McpServer {
+export function createMcpServer(
+  store: Store,
+  member: string,
+  onRoomChanged?: (roomId: string) => void,
+): McpServer {
   const server = new McpServer(
     { name: "quorus", version: "0.0.0" },
     {
+      capabilities: { resources: { subscribe: true } },
       instructions: [
         "Quorus is a coordination layer for AI agent swarms: shared Rooms where agents",
         "and humans exchange messages.",
@@ -88,8 +102,10 @@ export function createMcpServer(store: Store, member: string): McpServer {
         "   saw to fetch only what's new (omit it to get everything).",
         "5. get_room_state — see who is in a Room and its latest seq.",
         "",
-        "Your member identity is fixed for this connection — you never pass a sender.",
+        "Your member identity is fixed by your credential — you never pass a sender.",
         "A two-member Room is a DM. Delivery is pull-based: poll get_messages to catch up.",
+        "Each Room is also readable as the resource quorus://room/<room_id>; subscribe to",
+        "it to receive updated-pings when new messages arrive (then poll to fetch them).",
       ].join("\n"),
     },
   );
@@ -99,7 +115,7 @@ export function createMcpServer(store: Store, member: string): McpServer {
     {
       title: "Create room",
       description: "Create a new Room and return its room_id. You become its first member.",
-      inputSchema: { name: z.string().max(MAX_NAME_LENGTH).optional() },
+      inputSchema: z.object({ name: z.string().max(MAX_NAME_LENGTH).optional() }),
     },
     logged("create_room", member, async ({ name }: { name?: string }) => {
       const room = await store.createRoom(name?.trim() || "room", member);
@@ -112,7 +128,7 @@ export function createMcpServer(store: Store, member: string): McpServer {
     {
       title: "Join room",
       description: "Join an existing Room by room_id. Returns the Room's current state.",
-      inputSchema: { room_id: z.string().min(1) },
+      inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("join_room", member, async ({ room_id }: { room_id: string }) => {
       const room = await store.joinRoom(room_id, member);
@@ -127,10 +143,14 @@ export function createMcpServer(store: Store, member: string): McpServer {
     {
       title: "Send message",
       description: "Post a message to a Room. Returns the assigned seq.",
-      inputSchema: { room_id: z.string().min(1), text: z.string().min(1).max(MAX_TEXT_LENGTH) },
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        text: z.string().min(1).max(MAX_TEXT_LENGTH),
+      }),
     },
     logged("send_message", member, async ({ room_id, text }: { room_id: string; text: string }) => {
       const msg = await store.appendMessage(room_id, member, text);
+      onRoomChanged?.(room_id);
       return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
     }),
   );
@@ -140,7 +160,10 @@ export function createMcpServer(store: Store, member: string): McpServer {
     {
       title: "Get messages",
       description: "Fetch messages from a Room with seq greater than `since` (omit to get all).",
-      inputSchema: { room_id: z.string().min(1), since: z.number().int().min(0).optional() },
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        since: z.number().int().min(0).optional(),
+      }),
     },
     logged(
       "get_messages",
@@ -160,7 +183,7 @@ export function createMcpServer(store: Store, member: string): McpServer {
     {
       title: "Get room state",
       description: "Return a Room's name, members, and latest seq.",
-      inputSchema: { room_id: z.string().min(1) },
+      inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("get_room_state", member, async ({ room_id }: { room_id: string }) => {
       const room = await store.getRoom(room_id);
@@ -172,6 +195,37 @@ export function createMcpServer(store: Store, member: string): McpServer {
         { roomId: room.roomId, name: room.name, members: room.members, latestSeq },
       );
     }),
+  );
+
+  server.registerResource(
+    "room",
+    new ResourceTemplate("quorus://room/{roomId}", { list: undefined }),
+    {
+      title: "Room",
+      description:
+        "A Room's state and full message log as JSON. Subscribe to receive updated-pings.",
+      mimeType: "application/json",
+    },
+    async (uri, { roomId }) => {
+      const id = String(roomId);
+      const room = await store.getRoom(id);
+      if (!room) throw new RoomNotFoundError(id);
+      const messages = await store.getMessages(id, 0);
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify({
+              roomId: room.roomId,
+              name: room.name,
+              members: room.members,
+              messages,
+            }),
+          },
+        ],
+      };
+    },
   );
 
   return server;

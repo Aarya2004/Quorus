@@ -119,7 +119,7 @@ What changed in the world during the June→August pause. Verified against prima
   `@modelcontextprotocol/server` / `client` / `core` plus adapters, including an **official
   Hono adapter** (likely supersedes `@hono/mcp`). Requires zod ^4 (we already are). A codemod
   exists; v1 is supported ~6 more months and interoperates with v2 clients — no fire drill,
-  but new work is pointed at v2. → now a roadmap item.
+  but new work is pointed at v2. → *migrated 2026-08-24 (ADR 0007).*
 - **Claude Channels** — `claude/channel` is now a documented research preview (incl.
   permission relay), but the **idle-wake bug is still open**
   (anthropics/claude-code#44380): messages queue until the agent's next turn instead of
@@ -149,12 +149,16 @@ only in git history (commits before `088cfc2`).
 
 **Branch:** `main`
 
-**Iteration 0 — "the Room" — DONE (48 tests passing).** A single remote server speaks MCP over
-Streamable HTTP; agents on any machine connect by pointing their MCP client at the URL. The store
-is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is kept as
-the zero-config dev alternative, and both must pass one shared contract suite.
+**Iteration 0 — "the Room" — DONE, now on MCP 2026-07-28 (52 tests passing).** A single remote
+server speaks MCP over Streamable HTTP — spec revision 2026-07-28 (stateless, identity per
+request), with the SDK's built-in stateless fallback serving 2025-era clients (ADR 0007). The
+store is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is
+kept as the zero-config dev alternative, and both must pass one shared contract suite.
 
 **Tools (5):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`.
+**Resource:** each Room is readable as `quorus://room/<room_id>` and subscribable — a
+`subscriptions/listen` stream gets an updated-ping when a Message lands (latency hint only;
+delivery truth stays the `get_messages` seq cursor, ADR 0006/0007).
 
 **Repo layout:**
 
@@ -168,10 +172,10 @@ src/
   config.ts              # fail-closed auth config loader (ADR 0005)
   log.ts                 # tiny structured logger (level-gated, greppable)
   suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
-  server/tools.ts        # builds an MCP server with the 5 tools, identity bound per connection
+  server/tools.ts        # MCP server factory: 5 tools + Room resource; identity bound per request
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 48 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e
+  *.test.ts              # 52 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -181,7 +185,7 @@ Dockerfile, fly.toml     # container + single Fly machine, volume at /data
 .env.example             # QUORUS_TOKENS / QUORUS_INSECURE
 ```
 
-**Stack:** TypeScript / Node ≥22.13 (24 LTS), `@modelcontextprotocol/sdk` (Streamable HTTP), Hono + `@hono/mcp`,
+**Stack:** TypeScript / Node ≥22.13 (24 LTS), `@modelcontextprotocol/server` (SDK v2, spec 2026-07-28 + legacy fallback), Hono,
 zod, `node:sqlite`, Vitest, Biome, esbuild (build) + tsx (dev). Package manager: **Bun**
 (`bun install`); runtime stays Node. (`website/` is separately npm-managed.)
 
@@ -226,21 +230,20 @@ send → poll all work).* Roadmap:
 3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
    demo, so a stranger gets the moment fast. *Urgency up: a near-identical competitor
    (ExaDev/agent-comms) now exists — see Landscape.*
-4. **MCP 2026-07-28 / SDK v2 migration (new, from Landscape)** — spec removed protocol
-   sessions, so identity-per-connection must become explicit handles; `subscriptions/listen`
-   could upgrade delivery from polling at the same time. v1 interoperates for ~6 months —
-   plan, don't panic.
-5. **Delivery (deferred, ADR 0006)** — stays manual/poll. Long-poll rejected (freezes the
-   agent). Claude Channels wake is the ideal later experience but still Claude-only + idle-wake
-   bug open (claude-code#44380); revisit when it stabilises — or via `subscriptions/listen`
-   after the SDK v2 migration.
+4. **MCP 2026-07-28 / SDK v2 migration — ✅ DONE (2026-08-24, ADR 0007, TDD).** Identity is
+   per-request (Bearer → Member on every call; sessions Map deleted, the ADR 0004 cold-start
+   404 gone for modern clients). Rooms are subscribable resources; `send_message` publishes an
+   updated-ping to open `subscriptions/listen` streams. Legacy 2025-era clients are served by
+   the SDK's stateless fallback — verified in e2e with the v1 client.
+5. **Delivery (deferred, ADR 0006)** — stays manual/poll. The server now *emits* pings, but no
+   client turns a notification into an agent turn yet (Claude Code refreshes caches only;
+   Channels can't ride 2026-07-28 — claude-code#44380 still open). Revisit when a client acts
+   on resource-updated pings.
 6. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
    hold? Only then invest in: Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
 **Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.
 
-**Known wart:** `hono-rate-limiter` is a production dependency but is never imported —
-remove it or implement rate limiting deliberately.
 
 ---
 
@@ -248,6 +251,7 @@ remove it or implement rate limiting deliberately.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 | 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
@@ -257,7 +261,6 @@ remove it or implement rate limiting deliberately.
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 | 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
-| 2026-05-30 | docs: ADR 0002 — Node's built-in node:sqlite for persistence               |
 
 ---
 
@@ -279,7 +282,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 
 - **Wipe and rebuild** the Python v1 in TypeScript — same product, much simpler, deployable.
 - **One service**: the relay and the MCP endpoint are a single server (ADR 0001).
-- **Streamable HTTP** transport; identity bound per connection via `x-quorus-member`.
+- **Streamable HTTP** transport, spec 2026-07-28 (ADR 0007): identity bound **per request**
+  from the credential (Bearer token, or `x-quorus-member` in dev open mode); 2025-era clients
+  served by the SDK's stateless legacy fallback.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
 - **Membership** tracked from iteration 0 (roster only); access control deferred.
 - **Delivery is manual/poll** (ADR 0006). **Long-poll rejected** — a held tool call freezes the agent and blocks it from returning to the human. True idle-wake is Claude-only (`claude/channel`) + buggy; deferred as the ideal-later layer. No portable hands-free delivery exists today.
