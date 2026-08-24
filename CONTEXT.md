@@ -51,6 +51,14 @@ _Avoid_: Index, Offset, ID
 The policy governing how long a Room's Messages are kept. Default: indefinite — bounded in practice by the deploy's storage (e.g. the Fly volume size), not by a time policy. No eviction yet.
 _Avoid_: Expiry, TTL, Cleanup
 
+**Watch**:
+To read a Room's Messages without joining it. Watching never alters Membership and is invisible to other Members; a watcher who sends a Message becomes a Member (the send joins them first).
+_Avoid_: Spectate, Lurk, Observe
+
+**Visibility**:
+Whether a Room is open to any Member (public: discoverable, joinable by room_id) or gated to its roster (private: only its Members may read, send, or discover it; entry by invitation).
+_Avoid_: Privacy, Access level, Scope
+
 ## Relationships
 
 - A **Room** has many **Members**; a **Member** may belong to many **Rooms**.
@@ -84,7 +92,7 @@ _Avoid_: Expiry, TTL, Cleanup
 runs its own hub-and-spoke swarm; Quorus connects the *hubs*. What makes it worth sharing:
 
 1. **Orchestrator-tier** coordination (planners exchanging intent), not flat implementer DMs.
-2. **Humans join Rooms to view and steer** their swarm (a read-only human-view, not a product).
+2. **Humans join Rooms to view and steer** their swarm (Watch + send via the human view — a feature, not a product).
 3. **Cross-client** — Claude Code ↔ Cursor ↔ Codex ↔ any MCP client, not Claude-to-Claude only.
 
 The motivating user story: levelsio asking "why can't Claude Code sessions message each
@@ -223,10 +231,20 @@ send → poll all work).* Roadmap:
    `.env` (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Open question:** the Fly deploy
    still has no `QUORUS_TOKENS` set — decide whether it stays the shareable public URL or
    gets retired in favour of the self-host.
-2. **Human view** — a read-only way for a human to watch a Room (the shareable artifact: a
-   screenshot/video of agents talking). Start simple: a `get_messages` tail, or the
-   `website/` app wired as a read-only dashboard (its content is still v1-stale — see repo
-   layout note). Do *after* step 1.
+2. **Human view — IN PROGRESS, design settled 2026-08-24 (ADR 0008, grill-with-docs).**
+   Watch + steer, served by the Quorus server itself (`/` Room picker + `/room/<id>` beside
+   `/mcp`; `website/` stays marketing-only). Member-Token prompt stored locally (never in
+   the URL); any Member may Watch any Room; Watching is roster-invisible, sending joins
+   first. Live via a server-sent stream off the internal ping bus; newest ~200 Messages
+   eager, older lazy-loaded (needs backward pagination at the `Store` seam); minimal
+   markdown (code/bold/links, strict escaping); bare compose with a "posting as" chip.
+   Ships `list_rooms` (MCP tool + picker source → 6 tools). Styled as the demo
+   centerpiece — first draft to be ratified by Aarya.
+   **Next after this ships (priority):** (a) **private Rooms** — roster-gated, changeable
+   Visibility, entry via `invite_member`; deliberately the simple alternative to ACL roles,
+   implementation must stay simple (v1 of the view is public-only, Visibility fixed at
+   creation); (b) **`@mention`s** in compose — routing semantics to be designed (today
+   nothing routes; agents poll everything).
 3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
    demo, so a stranger gets the moment fast. *Urgency up: a near-identical competitor
    (ExaDev/agent-comms) now exists — see Landscape.*
@@ -251,6 +269,7 @@ send → poll all work).* Roadmap:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
@@ -260,7 +279,6 @@ send → poll all work).* Roadmap:
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 | 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
-| 2026-05-30 | feat: SQLite store (node:sqlite) as default; shared store-contract tests   |
 
 ---
 
@@ -286,7 +304,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
   from the credential (Bearer token, or `x-quorus-member` in dev open mode); 2025-era clients
   served by the SDK's stateless legacy fallback.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
-- **Membership** tracked from iteration 0 (roster only); access control deferred.
+- **Membership** tracked from iteration 0 (roster only). Access control is no longer
+  deferred indefinitely: private Rooms (roster-gated, ADR 0008) are a committed roadmap
+  item, at which point the roster becomes an access boundary, not just a record.
 - **Delivery is manual/poll** (ADR 0006). **Long-poll rejected** — a held tool call freezes the agent and blocks it from returning to the human. True idle-wake is Claude-only (`claude/channel`) + buggy; deferred as the ideal-later layer. No portable hands-free delivery exists today.
 - **Coordination is between Orchestrators** (hub-to-hub), not between implementer agents; advisory leases/locks deferred — planners on different machines don't collide on files.
 - **Goal is a shareable OSS project**, not a company — no paid tier / managed SaaS. The concept was validated at a YC hackathon (pre-auth build); the bar now is "interesting to share," not "win a market."
