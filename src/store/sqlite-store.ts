@@ -1,11 +1,17 @@
 import "../suppress-warnings"; // must precede node:sqlite to silence its load-time warning
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { RoomNotFoundError, type RoomRecord, type StoredMessage } from "../domain/types";
+import {
+  RoomNotFoundError,
+  type RoomRecord,
+  type StoredMessage,
+  type Visibility,
+} from "../domain/types";
 import type { Store } from "./store";
 
 interface RoomRow {
   name: string;
+  visibility: Visibility;
   created_at: number;
 }
 interface MessageRow {
@@ -33,6 +39,7 @@ export class SqliteStore implements Store {
       CREATE TABLE IF NOT EXISTS rooms (
         room_id    TEXT PRIMARY KEY,
         name       TEXT NOT NULL,
+        visibility TEXT NOT NULL DEFAULT 'public',
         created_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS members (
@@ -52,6 +59,13 @@ export class SqliteStore implements Store {
         FOREIGN KEY (room_id) REFERENCES rooms(room_id)
       );
     `);
+    // Pre-0009 databases lack the visibility column; existing Rooms stay public.
+    const cols = this.db.prepare("PRAGMA table_info(rooms)").all() as unknown as {
+      name: string;
+    }[];
+    if (!cols.some((c) => c.name === "visibility")) {
+      this.db.exec("ALTER TABLE rooms ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public';");
+    }
   }
 
   private membersOf(roomId: string): string[] {
@@ -61,35 +75,59 @@ export class SqliteStore implements Store {
     return rows.map((r) => r.member);
   }
 
-  async createRoom(name: string, creator: string): Promise<RoomRecord> {
+  private toRecord(roomId: string, row: RoomRow): RoomRecord {
+    return {
+      roomId,
+      name: row.name,
+      members: this.membersOf(roomId),
+      visibility: row.visibility,
+      createdAt: row.created_at,
+    };
+  }
+
+  async createRoom(
+    name: string,
+    creator: string,
+    visibility: Visibility = "public",
+  ): Promise<RoomRecord> {
     const roomId = `r_${randomBytes(8).toString("hex")}`;
     const now = Date.now();
     this.db
-      .prepare("INSERT INTO rooms (room_id, name, created_at) VALUES (?, ?, ?)")
-      .run(roomId, name, now);
+      .prepare("INSERT INTO rooms (room_id, name, visibility, created_at) VALUES (?, ?, ?, ?)")
+      .run(roomId, name, visibility, now);
     this.db
       .prepare("INSERT INTO members (room_id, member, joined_at) VALUES (?, ?, ?)")
       .run(roomId, creator, now);
-    return { roomId, name, members: [creator], createdAt: now };
+    return { roomId, name, members: [creator], visibility, createdAt: now };
   }
 
   async getRoom(roomId: string): Promise<RoomRecord | undefined> {
     const row = this.db
-      .prepare("SELECT name, created_at FROM rooms WHERE room_id = ?")
+      .prepare("SELECT name, visibility, created_at FROM rooms WHERE room_id = ?")
       .get(roomId) as unknown as RoomRow | undefined;
-    if (!row) return undefined;
-    return { roomId, name: row.name, members: this.membersOf(roomId), createdAt: row.created_at };
+    return row ? this.toRecord(roomId, row) : undefined;
   }
 
   async joinRoom(roomId: string, member: string): Promise<RoomRecord> {
     const row = this.db
-      .prepare("SELECT name, created_at FROM rooms WHERE room_id = ?")
+      .prepare("SELECT name, visibility, created_at FROM rooms WHERE room_id = ?")
       .get(roomId) as unknown as RoomRow | undefined;
     if (!row) throw new RoomNotFoundError(roomId);
     this.db
       .prepare("INSERT OR IGNORE INTO members (room_id, member, joined_at) VALUES (?, ?, ?)")
       .run(roomId, member, Date.now());
-    return { roomId, name: row.name, members: this.membersOf(roomId), createdAt: row.created_at };
+    return this.toRecord(roomId, row);
+  }
+
+  async setVisibility(roomId: string, visibility: Visibility): Promise<RoomRecord> {
+    const changed = this.db
+      .prepare("UPDATE rooms SET visibility = ? WHERE room_id = ?")
+      .run(visibility, roomId);
+    if (changed.changes === 0) throw new RoomNotFoundError(roomId);
+    const row = this.db
+      .prepare("SELECT name, visibility, created_at FROM rooms WHERE room_id = ?")
+      .get(roomId) as unknown as RoomRow;
+    return this.toRecord(roomId, row);
   }
 
   async appendMessage(roomId: string, from: string, text: string): Promise<StoredMessage> {
@@ -134,14 +172,9 @@ export class SqliteStore implements Store {
 
   async listRooms(): Promise<RoomRecord[]> {
     const rows = this.db
-      .prepare("SELECT room_id, name, created_at FROM rooms ORDER BY created_at, rowid")
-      .all() as unknown as { room_id: string; name: string; created_at: number }[];
-    return rows.map((r) => ({
-      roomId: r.room_id,
-      name: r.name,
-      members: this.membersOf(r.room_id),
-      createdAt: r.created_at,
-    }));
+      .prepare("SELECT room_id, name, visibility, created_at FROM rooms ORDER BY created_at, rowid")
+      .all() as unknown as ({ room_id: string } & RoomRow)[];
+    return rows.map((r) => this.toRecord(r.room_id, r));
   }
 
   /** Release the database handle. */

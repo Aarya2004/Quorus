@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RoomNotFoundError, type RoomRecord, type StoredMessage } from "../domain/types";
+import {
+  RoomNotFoundError,
+  type RoomRecord,
+  type StoredMessage,
+  type Visibility,
+} from "../domain/types";
 import { log } from "../log";
 import type { Store } from "./store";
 
@@ -52,7 +57,9 @@ export class JsonlStore implements Store {
   private async readMeta(roomId: string): Promise<RoomRecord | undefined> {
     try {
       const raw = await readFile(this.metaPath(roomId), "utf8");
-      return JSON.parse(raw) as RoomRecord;
+      // Pre-0009 meta files lack visibility; existing Rooms stay public.
+      const meta = JSON.parse(raw) as Omit<RoomRecord, "visibility"> & { visibility?: Visibility };
+      return { ...meta, visibility: meta.visibility ?? "public" };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw err;
@@ -92,12 +99,34 @@ export class JsonlStore implements Store {
     return seq;
   }
 
-  async createRoom(name: string, creator: string): Promise<RoomRecord> {
+  async createRoom(
+    name: string,
+    creator: string,
+    visibility: Visibility = "public",
+  ): Promise<RoomRecord> {
     const roomId = `r_${randomBytes(8).toString("hex")}`;
-    const meta: RoomRecord = { roomId, name, members: [creator], createdAt: Date.now() };
+    const meta: RoomRecord = {
+      roomId,
+      name,
+      members: [creator],
+      visibility,
+      createdAt: Date.now(),
+    };
     await this.writeMeta(meta);
     this.seqCache.set(roomId, 0);
     return { ...meta, members: [...meta.members] };
+  }
+
+  async setVisibility(roomId: string, visibility: Visibility): Promise<RoomRecord> {
+    return this.withLock(roomId, async () => {
+      const meta = await this.readMeta(roomId);
+      if (!meta) throw new RoomNotFoundError(roomId);
+      if (meta.visibility !== visibility) {
+        meta.visibility = visibility;
+        await this.writeMeta(meta);
+      }
+      return { ...meta, members: [...meta.members] };
+    });
   }
 
   async getRoom(roomId: string): Promise<RoomRecord | undefined> {

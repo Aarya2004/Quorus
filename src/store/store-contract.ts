@@ -135,6 +135,35 @@ export function storeContract(label: string, makeStore: (path: string) => Store)
       expect(listed[1]).toMatchObject({ name: "second", members: ["bob"] });
     });
 
+    it("creates Rooms public by default and honours an explicit visibility", async () => {
+      const store = makeStore(await freshPath());
+      const open = await store.createRoom("open", "alice");
+      expect(open.visibility).toBe("public");
+      const gated = await store.createRoom("gated", "alice", "private");
+      expect(gated.visibility).toBe("private");
+      expect((await store.getRoom(gated.roomId))?.visibility).toBe("private");
+    });
+
+    it("flips visibility both ways and persists it across reopen", async () => {
+      const path = await freshPath();
+      const store = makeStore(path);
+      const { roomId } = await store.createRoom("plan", "alice");
+      expect((await store.setVisibility(roomId, "private")).visibility).toBe("private");
+      expect((await store.setVisibility(roomId, "public")).visibility).toBe("public");
+      await store.setVisibility(roomId, "private");
+      (store as { close?: () => void }).close?.();
+
+      const reopened = makeStore(path);
+      expect((await reopened.getRoom(roomId))?.visibility).toBe("private");
+    });
+
+    it("throws RoomNotFoundError when setting visibility on an unknown Room", async () => {
+      const store = makeStore(await freshPath());
+      await expect(store.setVisibility("r_nope", "private")).rejects.toBeInstanceOf(
+        RoomNotFoundError,
+      );
+    });
+
     it("persists across a fresh store instance at the same path", async () => {
       const path = await freshPath();
       const first = makeStore(path);

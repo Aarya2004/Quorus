@@ -3,8 +3,9 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-25 (README rewritten for the post-0007/0008 state; the one-command
-demo dropped from scope by Aarya. Previous session's handoff:
+Last updated: 2026-08-25 (README rewritten for the post-0007/0008 state — demo dropped from
+scope by Aarya; **private Rooms shipped** (ADR 0009, TDD): roster-gated Visibility,
+`invite_member` + `set_visibility` → 8 tools, 77 tests. Previous session's handoff:
 `docs/handoffs/2026-08-24-session.md`)
 
 ---
@@ -159,14 +160,18 @@ only in git history (commits before `088cfc2`).
 
 **Branch:** `main`
 
-**Iteration 0 — "the Room" — DONE, now on MCP 2026-07-28 (52 tests passing).** A single remote
+**Iteration 0 — "the Room" — DONE, now on MCP 2026-07-28 (77 tests passing).** A single remote
 server speaks MCP over Streamable HTTP — spec revision 2026-07-28 (stateless, identity per
 request), with the SDK's built-in stateless fallback serving 2025-era clients (ADR 0007). The
 store is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is
 kept as the zero-config dev alternative, and both must pass one shared contract suite.
 
-**Tools (6):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`,
-`list_rooms`.
+**Tools (8):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`,
+`list_rooms`, `invite_member`, `set_visibility`.
+**Visibility (ADR 0009):** Rooms are public by default; a private Room is roster-gated — only
+its Members may read, send, or discover it (indistinguishable from nonexistent to anyone
+else; entry via `invite_member`; any Member may invite or flip Visibility). One shared
+`canAccess` guard in the domain layer backs both the MCP tools and the view API.
 **Resource:** each Room is readable as `quorus://room/<room_id>` and subscribable — a
 `subscriptions/listen` stream gets an updated-ping when a Message lands (latency hint only;
 delivery truth stays the `get_messages` seq cursor, ADR 0006/0007).
@@ -183,14 +188,14 @@ src/
   config.ts              # fail-closed auth config loader (ADR 0005)
   log.ts                 # tiny structured logger (level-gated, greppable)
   suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
-  server/tools.ts        # MCP server factory: 6 tools + Room resource; identity bound per request
+  server/tools.ts        # MCP server factory: 8 tools + Room resource; identity bound per request
   server/auth.ts         # shared request→Member resolution (open + token modes)
   server/view.ts         # human view API: page routes, /api/*, live SSE stream (ADR 0008)
   server/page.ts         # human view shell (HTML+CSS, self-contained — no CDN)
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 66 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
+  *.test.ts              # 77 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -255,11 +260,11 @@ send → poll all work).* Roadmap:
    markdown (code/bold/links, strict escaping); bare compose with a "posting as" chip.
    Ships `list_rooms` (MCP tool + picker source → 6 tools). Styled as the demo
    centerpiece — first draft to be ratified by Aarya.
-   **Next after this ships (priority):** (a) **private Rooms** — roster-gated, changeable
-   Visibility, entry via `invite_member`; deliberately the simple alternative to ACL roles,
-   implementation must stay simple (v1 of the view is public-only, Visibility fixed at
-   creation); (b) **`@mention`s** in compose — routing semantics to be designed (today
-   nothing routes; agents poll everything).
+   **Next after this ships (priority):** (a) **private Rooms — ✅ SHIPPED 2026-08-25
+   (ADR 0009, TDD)** — roster-gated changeable Visibility, direct-add `invite_member`,
+   any-Member authority (provisional — revisit needs a new ADR), non-members get
+   not-found everywhere; (b) **`@mention`s** in compose — routing semantics to be
+   designed (today nothing routes; agents poll everything).
 3. **First-run polish — README ✅ DONE (2026-08-25).** Rewritten for the post-0007/0008
    state: story-led hero, human view section, 6-tool table + Room resource, connect
    examples point at localhost/self-host (Fly URL removed from the first-run path — the
@@ -292,6 +297,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
 | 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
@@ -301,7 +307,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
 | 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
-| 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 
 ---
 
@@ -311,7 +316,8 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶  Quorus server  (one deployable service)
                                           ├─ auth   — Bearer token → Member (fail-closed, ADR 0005)
-                                          ├─ /mcp   — 5 tools, identity per connection
+                                          ├─ /mcp   — 8 tools, identity per request
+                                          ├─ view   — / picker + /room/<id> + live stream
                                           └─ Store  — SQLite (default) or JSONL; Postgres/Redis later
 ```
 
@@ -327,9 +333,11 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
   from the credential (Bearer token, or `x-quorus-member` in dev open mode); 2025-era clients
   served by the SDK's stateless legacy fallback.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
-- **Membership** tracked from iteration 0 (roster only). Access control is no longer
-  deferred indefinitely: private Rooms (roster-gated, ADR 0008) are a committed roadmap
-  item, at which point the roster becomes an access boundary, not just a record.
+- **Membership** tracked from iteration 0. Since private Rooms shipped (ADR 0009,
+  2026-08-25) the roster is an access boundary, not just a record: a private Room is
+  roster-gated (read/send/discover) and indistinguishable from nonexistent to outsiders;
+  any Member may invite or flip Visibility (provisional — revisiting authority needs a
+  new ADR).
 - **Delivery is manual/poll** (ADR 0006). **Long-poll rejected** — a held tool call freezes the agent and blocks it from returning to the human. True idle-wake is Claude-only (`claude/channel`) + buggy; deferred as the ideal-later layer. No portable hands-free delivery exists today.
 - **Coordination is between Orchestrators** (hub-to-hub), not between implementer agents; advisory leases/locks deferred — planners on different machines don't collide on files.
 - **Goal is a shareable OSS project**, not a company — no paid tier / managed SaaS. The concept was validated at a YC hackathon (pre-auth build); the bar now is "interesting to share," not "win a market."

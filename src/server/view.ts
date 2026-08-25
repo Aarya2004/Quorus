@@ -3,7 +3,7 @@ import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { AuthConfig } from "../config";
-import { MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import { canAccess, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
 import { resolveMember } from "./auth";
@@ -42,8 +42,10 @@ export function registerViewApi(
   });
 
   app.get("/api/rooms", async (c) => {
-    if (!authed(c)) return c.json({ error: "unauthorized" }, 401);
-    const records = await store.listRooms();
+    const member = authed(c);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    // The roster gate (ADR 0009): private Rooms exist only for their Members.
+    const records = (await store.listRooms()).filter((r) => canAccess(r, member));
     const rooms = await Promise.all(
       records.map(async (r) => {
         const last = await store.getMessagesBefore(r.roomId, undefined, 1);
@@ -54,10 +56,11 @@ export function registerViewApi(
   });
 
   app.get("/api/rooms/:id", async (c) => {
-    if (!authed(c)) return c.json({ error: "unauthorized" }, 401);
+    const member = authed(c);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
     const roomId = c.req.param("id");
     const room = await store.getRoom(roomId);
-    if (!room) return c.json({ error: "room not found" }, 404);
+    if (!room || !canAccess(room, member)) return c.json({ error: "room not found" }, 404);
 
     const limitRaw = Number(c.req.query("limit") ?? DEFAULT_PAGE);
     const limit = Math.min(
@@ -79,6 +82,8 @@ export function registerViewApi(
     const parsed = postBody.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ error: "text must be 1..8000 characters" }, 400);
     try {
+      const room = await store.getRoom(roomId);
+      if (!room || !canAccess(room, member)) return c.json({ error: "room not found" }, 404);
       // Sending joins first (ADR 0008): the roster records who has spoken.
       await store.joinRoom(roomId, member);
       const msg = await store.appendMessage(roomId, member, parsed.data.text);
@@ -96,7 +101,7 @@ export function registerViewApi(
     if (!member) return c.json({ error: "unauthorized" }, 401);
     const roomId = c.req.param("id");
     const room = await store.getRoom(roomId);
-    if (!room) return c.json({ error: "room not found" }, 404);
+    if (!room || !canAccess(room, member)) return c.json({ error: "room not found" }, 404);
 
     const sinceRaw = Number(c.req.query("since") ?? NaN);
     let cursor: number;

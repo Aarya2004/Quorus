@@ -1,4 +1,4 @@
-import type { RoomRecord, StoredMessage } from "../domain/types";
+import type { RoomRecord, StoredMessage, Visibility } from "../domain/types";
 
 /**
  * Persistence seam for Quorus.
@@ -11,7 +11,10 @@ import type { RoomRecord, StoredMessage } from "../domain/types";
  */
 export interface Store {
   /** Create a Room with `creator` as its first Member. Returns the new record. */
-  createRoom(name: string, creator: string): Promise<RoomRecord>;
+  createRoom(name: string, creator: string, visibility?: Visibility): Promise<RoomRecord>;
+
+  /** Set a Room's Visibility (ADR 0009). Throws if the Room is unknown. */
+  setVisibility(roomId: string, visibility: Visibility): Promise<RoomRecord>;
 
   /** Fetch a Room, or `undefined` if it does not exist. */
   getRoom(roomId: string): Promise<RoomRecord | undefined>;

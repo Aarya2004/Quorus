@@ -19,13 +19,29 @@ export interface StoredMessage {
   ts: number;
 }
 
+/**
+ * Whether a Room is open to any Member (public) or gated to its roster
+ * (private: only its Members may read, send, or discover it — ADR 0009).
+ */
+export type Visibility = "public" | "private";
+
 /** A Room and its membership roster. */
 export interface RoomRecord {
   roomId: string;
   name: string;
   /** Membership: the Members that belong to this Room (recorded on join). */
   members: string[];
+  visibility: Visibility;
   createdAt: number;
+}
+
+/**
+ * The roster gate (ADR 0009), shared by the MCP tools and the view API so the
+ * boundary is never enforced in the browser page alone. To a Member without
+ * access, a private Room must be indistinguishable from a nonexistent one.
+ */
+export function canAccess(room: RoomRecord, member: string): boolean {
+  return room.visibility === "public" || room.members.includes(member);
 }
 
 /** Raised when an operation targets a Room that does not exist. */

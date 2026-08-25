@@ -1,7 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import {
+  canAccess,
+  MAX_NAME_LENGTH,
+  MAX_TEXT_LENGTH,
+  RoomNotFoundError,
+  type RoomRecord,
+  type Visibility,
+} from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
 
@@ -101,7 +108,9 @@ export function createMcpServer(
         "4. get_messages — poll a Room for messages. Pass `since` set to the last seq you",
         "   saw to fetch only what's new (omit it to get everything).",
         "5. get_room_state — see who is in a Room and its latest seq.",
-        "6. list_rooms — discover existing Rooms (all Rooms are public for now).",
+        "6. list_rooms — discover Rooms. Private Rooms only appear if you are a member.",
+        "7. invite_member — add a Member to a Room's roster (the entry to a private Room).",
+        "8. set_visibility — make a Room public (open to all) or private (roster-only).",
         "",
         "Your member identity is fixed by your credential — you never pass a sender.",
         "A two-member Room is a DM. Delivery is pull-based: poll get_messages to catch up.",
@@ -111,17 +120,36 @@ export function createMcpServer(
     },
   );
 
+  /**
+   * The roster gate (ADR 0009): resolve a Room the acting member may access.
+   * A private Room is indistinguishable from a nonexistent one to outsiders.
+   */
+  const accessibleRoom = async (roomId: string): Promise<RoomRecord> => {
+    const room = await store.getRoom(roomId);
+    if (!room || !canAccess(room, member)) throw new RoomNotFoundError(roomId);
+    return room;
+  };
+
   server.registerTool(
     "create_room",
     {
       title: "Create room",
-      description: "Create a new Room and return its room_id. You become its first member.",
-      inputSchema: z.object({ name: z.string().max(MAX_NAME_LENGTH).optional() }),
+      description:
+        "Create a new Room and return its room_id. You become its first member. " +
+        "Visibility defaults to public; a private Room admits only invited Members.",
+      inputSchema: z.object({
+        name: z.string().max(MAX_NAME_LENGTH).optional(),
+        visibility: z.enum(["public", "private"]).optional(),
+      }),
     },
-    logged("create_room", member, async ({ name }: { name?: string }) => {
-      const room = await store.createRoom(name?.trim() || "room", member);
-      return ok(`Created room "${room.name}" (${room.roomId}).`, { ...room });
-    }),
+    logged(
+      "create_room",
+      member,
+      async ({ name, visibility }: { name?: string; visibility?: Visibility }) => {
+        const room = await store.createRoom(name?.trim() || "room", member, visibility);
+        return ok(`Created ${room.visibility} room "${room.name}" (${room.roomId}).`, { ...room });
+      },
+    ),
   );
 
   server.registerTool(
@@ -132,11 +160,67 @@ export function createMcpServer(
       inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("join_room", member, async ({ room_id }: { room_id: string }) => {
+      await accessibleRoom(room_id);
       const room = await store.joinRoom(room_id, member);
       return ok(`Joined "${room.name}" (${room.roomId}). Members: ${room.members.join(", ")}.`, {
         ...room,
       });
     }),
+  );
+
+  server.registerTool(
+    "invite_member",
+    {
+      title: "Invite member",
+      description:
+        "Add a Member to a Room's roster. The only entry to a private Room; " +
+        "the invitee can read and send immediately.",
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        member: z.string().min(1).max(MAX_NAME_LENGTH),
+      }),
+    },
+    logged(
+      "invite_member",
+      member,
+      async ({ room_id, member: invitee }: { room_id: string; member: string }) => {
+        const room = await accessibleRoom(room_id);
+        if (!room.members.includes(member))
+          return fail("Only a member of the Room can invite. Join it first.");
+        const updated = await store.joinRoom(room_id, invitee);
+        return ok(
+          `Invited ${invitee} to "${updated.name}". Members: ${updated.members.join(", ")}.`,
+          { ...updated },
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    "set_visibility",
+    {
+      title: "Set visibility",
+      description:
+        "Make a Room public (open to all Members) or private (roster-only). " +
+        "Flipping public exposes the Room's entire history.",
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        visibility: z.enum(["public", "private"]),
+      }),
+    },
+    logged(
+      "set_visibility",
+      member,
+      async ({ room_id, visibility }: { room_id: string; visibility: Visibility }) => {
+        const room = await accessibleRoom(room_id);
+        if (!room.members.includes(member))
+          return fail("Only a member of the Room can change its visibility. Join it first.");
+        const updated = await store.setVisibility(room_id, visibility);
+        return ok(`"${updated.name}" (${updated.roomId}) is now ${updated.visibility}.`, {
+          ...updated,
+        });
+      },
+    ),
   );
 
   server.registerTool(
@@ -150,6 +234,7 @@ export function createMcpServer(
       }),
     },
     logged("send_message", member, async ({ room_id, text }: { room_id: string; text: string }) => {
+      await accessibleRoom(room_id);
       const msg = await store.appendMessage(room_id, member, text);
       onRoomChanged?.(room_id);
       return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
@@ -170,6 +255,7 @@ export function createMcpServer(
       "get_messages",
       member,
       async ({ room_id, since }: { room_id: string; since?: number }) => {
+        await accessibleRoom(room_id);
         const messages = await store.getMessages(room_id, since);
         const text = messages.length
           ? messages.map((m) => `[${m.seq}] ${m.from}: ${m.text}`).join("\n")
@@ -187,7 +273,7 @@ export function createMcpServer(
       inputSchema: z.object({}),
     },
     logged("list_rooms", member, async () => {
-      const records = await store.listRooms();
+      const records = (await store.listRooms()).filter((r) => canAccess(r, member));
       const rooms = await Promise.all(
         records.map(async (r) => {
           const last = await store.getMessagesBefore(r.roomId, undefined, 1);
@@ -211,8 +297,7 @@ export function createMcpServer(
       inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("get_room_state", member, async ({ room_id }: { room_id: string }) => {
-      const room = await store.getRoom(room_id);
-      if (!room) throw new RoomNotFoundError(room_id);
+      const room = await accessibleRoom(room_id);
       const messages = await store.getMessages(room_id, 0);
       const latestSeq = messages.reduce((max, m) => Math.max(max, m.seq), 0);
       return ok(
@@ -233,8 +318,7 @@ export function createMcpServer(
     },
     async (uri, { roomId }) => {
       const id = String(roomId);
-      const room = await store.getRoom(id);
-      if (!room) throw new RoomNotFoundError(id);
+      const room = await accessibleRoom(id);
       const messages = await store.getMessages(id, 0);
       return {
         contents: [

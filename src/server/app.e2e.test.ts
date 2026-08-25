@@ -154,7 +154,13 @@ describe("modern era (2026-07-28)", () => {
 describe("human view API", () => {
   let url: URL;
   let close: () => void;
-  const auth: AuthConfig = { mode: "token", tokens: new Map([["tk_alice", "alice"]]) };
+  const auth: AuthConfig = {
+    mode: "token",
+    tokens: new Map([
+      ["tk_alice", "alice"],
+      ["tk_bob", "bob"],
+    ]),
+  };
   beforeAll(async () => ({ url, close } = await startApp(auth)));
   afterAll(() => close());
 
@@ -248,6 +254,39 @@ describe("human view API", () => {
     // Posting joined alice (she was already a member as creator) — assert roster honest.
     const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
     expect(page.members).toContain("alice");
+  });
+
+  it("hides a private Room from a non-member's view until they are invited", async () => {
+    const bobApi = (path: string, init?: RequestInit) =>
+      fetch(new URL(path, url), {
+        ...init,
+        headers: { authorization: "Bearer tk_bob", ...(init?.headers ?? {}) },
+      });
+
+    const alice = await connectV2(url, { authorization: "Bearer tk_alice" });
+    const created = await alice.callTool({
+      name: "create_room",
+      arguments: { name: "war-room", visibility: "private" },
+    });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    // To bob the Room does not exist: absent from the picker, 404 everywhere.
+    const { rooms } = (await (await bobApi("/api/rooms")).json()) as Any;
+    expect(rooms.map((r: Any) => r.roomId)).not.toContain(roomId);
+    expect((await bobApi(`/api/rooms/${roomId}`)).status).toBe(404);
+    expect((await bobApi(`/api/rooms/${roomId}/stream`)).status).toBe(404);
+    const post = await bobApi(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "knock knock" }),
+    });
+    expect(post.status).toBe(404);
+
+    await alice.callTool({ name: "invite_member", arguments: { room_id: roomId, member: "bob" } });
+    await alice.close();
+
+    const page = (await (await bobApi(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(page).toMatchObject({ roomId, name: "war-room", visibility: "private" });
   });
 
   it("rejects an empty or oversize view post", async () => {
