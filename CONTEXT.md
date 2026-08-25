@@ -3,7 +3,10 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-24 (resumed after ~12-week pause; full doc staleness refresh + new **Landscape** section — MCP spec 2026-07-28 / SDK v2, Claude Channels status, competitor scan)
+Last updated: 2026-08-24 (big session after ~12-week pause: doc refresh + Landscape, 24/7
+WSL/Tailscale dogfood deploy w/ cross-machine auth proven, MCP 2026-07-28 / SDK v2
+migration (ADR 0007), human view shipped + ratified (ADR 0008). Handoff:
+`docs/handoffs/2026-08-24-session.md`)
 
 ---
 
@@ -236,7 +239,10 @@ send → poll all work).* Roadmap:
    `.env` (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Open question:** the Fly deploy
    still has no `QUORUS_TOKENS` set — decide whether it stays the shareable public URL or
    gets retired in favour of the self-host.
-2. **Human view — FIRST DRAFT BUILT 2026-08-24, awaiting Aarya's ratification (ADR 0008).**
+2. **Human view — ✅ SHIPPED & RATIFIED 2026-08-24 (ADR 0008).** Aarya ratified on the live
+   container (posted from the view; send-joins-first and live stream confirmed end to end).
+   Noted "definitely possible UI/UX improvements" — collect specifics and iterate. Build
+   details:
    Server pieces landed TDD (66 tests): `list_rooms` tool, backward pagination at the Store
    seam, `/api/*` + live SSE stream off the ping bus, and the styled page (`/` picker +
    `/room/<id>` — "listening post" design: warm-dark, signal-amber, serif transcript over a
