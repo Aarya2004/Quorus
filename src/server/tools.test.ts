@@ -27,7 +27,7 @@ describe("MCP tools", () => {
     store = new JsonlStore(dir);
   });
 
-  it("exposes exactly the five iteration-0 tools", async () => {
+  it("exposes exactly the six tools", async () => {
     const alice = await connect(store, "alice");
     const { tools } = await alice.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
@@ -35,8 +35,24 @@ describe("MCP tools", () => {
       "get_messages",
       "get_room_state",
       "join_room",
+      "list_rooms",
       "send_message",
     ]);
+  });
+
+  it("lists Rooms with roster and latest seq", async () => {
+    const alice = await connect(store, "alice");
+    const empty = await alice.callTool({ name: "list_rooms", arguments: {} });
+    expect((empty.structuredContent as Any).rooms).toEqual([]);
+
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "plan" } });
+    const roomId = (created.structuredContent as Any).roomId;
+    await alice.callTool({ name: "send_message", arguments: { room_id: roomId, text: "hi" } });
+
+    const listed = await alice.callTool({ name: "list_rooms", arguments: {} });
+    const rooms = (listed.structuredContent as Any).rooms;
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0]).toMatchObject({ roomId, name: "plan", members: ["alice"], latestSeq: 1 });
   });
 
   it("runs the DM scenario end to end (the iteration-0 acceptance test)", async () => {

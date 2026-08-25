@@ -163,7 +163,8 @@ request), with the SDK's built-in stateless fallback serving 2025-era clients (A
 store is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is
 kept as the zero-config dev alternative, and both must pass one shared contract suite.
 
-**Tools (5):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`.
+**Tools (6):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`,
+`list_rooms`.
 **Resource:** each Room is readable as `quorus://room/<room_id>` and subscribable — a
 `subscriptions/listen` stream gets an updated-ping when a Message lands (latency hint only;
 delivery truth stays the `get_messages` seq cursor, ADR 0006/0007).
@@ -180,10 +181,14 @@ src/
   config.ts              # fail-closed auth config loader (ADR 0005)
   log.ts                 # tiny structured logger (level-gated, greppable)
   suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
-  server/tools.ts        # MCP server factory: 5 tools + Room resource; identity bound per request
+  server/tools.ts        # MCP server factory: 6 tools + Room resource; identity bound per request
+  server/auth.ts         # shared request→Member resolution (open + token modes)
+  server/view.ts         # human view API: page routes, /api/*, live SSE stream (ADR 0008)
+  server/page.ts         # human view shell (HTML+CSS, self-contained — no CDN)
+  server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 52 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras)
+  *.test.ts              # 66 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -231,7 +236,12 @@ send → poll all work).* Roadmap:
    `.env` (3 Members: `aarya-wsl`, `aarya-mac`, `aarya`). **Open question:** the Fly deploy
    still has no `QUORUS_TOKENS` set — decide whether it stays the shareable public URL or
    gets retired in favour of the self-host.
-2. **Human view — IN PROGRESS, design settled 2026-08-24 (ADR 0008, grill-with-docs).**
+2. **Human view — FIRST DRAFT BUILT 2026-08-24, awaiting Aarya's ratification (ADR 0008).**
+   Server pieces landed TDD (66 tests): `list_rooms` tool, backward pagination at the Store
+   seam, `/api/*` + live SSE stream off the ping bus, and the styled page (`/` picker +
+   `/room/<id>` — "listening post" design: warm-dark, signal-amber, serif transcript over a
+   mono seq rail). Open mode accepts a Bearer name so the view works in dev. Original
+   settled design follows:
    Watch + steer, served by the Quorus server itself (`/` Room picker + `/room/<id>` beside
    `/mcp`; `website/` stays marketing-only). Member-Token prompt stored locally (never in
    the URL); any Member may Watch any Room; Watching is roster-invisible, sending joins
@@ -261,6 +271,10 @@ send → poll all work).* Roadmap:
    hold? Only then invest in: Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
 **Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.
+**Deferred** (experiment, low priority — branch if ever): scale-out tier à la Warp
+session-sharing (shared pub-sub bus, Postgres + blob-segment cold storage, N nodes). The
+seams are already in place (`Store`, `ServerEventBus`); Messages being append-only +
+seq-ordered makes cold segments trivial. Not needed at current scale.
 
 
 ---
@@ -269,6 +283,7 @@ send → poll all work).* Roadmap:
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
@@ -278,7 +293,6 @@ send → poll all work).* Roadmap:
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
 | 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
-| 2026-05-31 | docs: sharpen positioning — orchestrator-tier, cross-machine, human-steer; dogfood-first |
 
 ---
 

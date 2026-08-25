@@ -1,10 +1,11 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import type { Context } from "hono";
 import { Hono } from "hono";
 import type { AuthConfig } from "../config";
 import { log } from "../log";
 import type { Store } from "../store/store";
+import { resolveMember } from "./auth";
 import { createMcpServer, roomUri } from "./tools";
+import { registerViewApi } from "./view";
 
 /**
  * Build the Quorus HTTP app: a single `/mcp` endpoint speaking MCP over
@@ -50,40 +51,7 @@ export function createApp(store: Store, auth: AuthConfig): Hono {
     });
   });
 
+  registerViewApi(app, store, auth, handler.bus, onRoomChanged);
+
   return app;
-}
-
-/**
- * Resolve the authenticated Member for a request, or null to reject.
- *
- * - `open`: identity is the self-asserted `x-quorus-member` header (dev only).
- * - `token`: identity is *derived* from the `Authorization: Bearer` token; a
- *   client-supplied `x-quorus-member` may not contradict it (it can fail a
- *   request, never grant an identity). Tokens are never logged.
- */
-function resolveMember(c: Context, auth: AuthConfig): string | null {
-  if (auth.mode === "open") {
-    const member = c.req.header("x-quorus-member")?.trim();
-    if (!member) {
-      log.warn("request.reject", { reason: "missing x-quorus-member" });
-      return null;
-    }
-    return member;
-  }
-
-  const header = c.req.header("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  const member = token ? auth.tokens.get(token) : undefined;
-  if (!member) {
-    log.warn("request.reject", { reason: "bad token" });
-    return null;
-  }
-
-  // A client-supplied member name may not contradict the token's identity.
-  const claimed = c.req.header("x-quorus-member")?.trim();
-  if (claimed && claimed !== member) {
-    log.warn("request.reject", { reason: "identity mismatch", member });
-    return null;
-  }
-  return member;
 }

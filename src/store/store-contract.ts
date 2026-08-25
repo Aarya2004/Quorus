@@ -99,6 +99,42 @@ export function storeContract(label: string, makeStore: (path: string) => Store)
       expect(seqs).toEqual(Array.from({ length: n }, (_, i) => i + 1));
     });
 
+    it("pages backwards: latest `limit` messages, then older before a cursor", async () => {
+      const store = makeStore(await freshPath());
+      const { roomId } = await store.createRoom("planning", "alice");
+      for (let i = 1; i <= 7; i++) await store.appendMessage(roomId, "alice", `m${i}`);
+
+      // No cursor: the newest `limit`, still in ascending seq order.
+      const tail = await store.getMessagesBefore(roomId, undefined, 3);
+      expect(tail.map((m) => m.text)).toEqual(["m5", "m6", "m7"]);
+
+      // Cursor: the `limit` messages immediately before seq 5.
+      const older = await store.getMessagesBefore(roomId, 5, 3);
+      expect(older.map((m) => m.text)).toEqual(["m2", "m3", "m4"]);
+
+      // Fewer remain than `limit`: return what exists.
+      expect((await store.getMessagesBefore(roomId, 2, 3)).map((m) => m.text)).toEqual(["m1"]);
+      expect(await store.getMessagesBefore(roomId, 1, 3)).toEqual([]);
+    });
+
+    it("throws RoomNotFoundError when paging an unknown Room", async () => {
+      const store = makeStore(await freshPath());
+      await expect(store.getMessagesBefore("r_nope", undefined, 5)).rejects.toBeInstanceOf(
+        RoomNotFoundError,
+      );
+    });
+
+    it("lists all Rooms, oldest first", async () => {
+      const store = makeStore(await freshPath());
+      expect(await store.listRooms()).toEqual([]);
+      const a = await store.createRoom("first", "alice");
+      await new Promise((r) => setTimeout(r, 2)); // distinct createdAt for a real order check
+      const b = await store.createRoom("second", "bob");
+      const listed = await store.listRooms();
+      expect(listed.map((r) => r.roomId)).toEqual([a.roomId, b.roomId]);
+      expect(listed[1]).toMatchObject({ name: "second", members: ["bob"] });
+    });
+
     it("persists across a fresh store instance at the same path", async () => {
       const path = await freshPath();
       const first = makeStore(path);

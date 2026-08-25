@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { RoomNotFoundError, type RoomRecord, type StoredMessage } from "../domain/types";
 import { log } from "../log";
@@ -156,5 +156,33 @@ export class JsonlStore implements Store {
       }
     }
     return out;
+  }
+
+  async getMessagesBefore(
+    roomId: string,
+    before: number | undefined,
+    limit: number,
+  ): Promise<StoredMessage[]> {
+    // The dev store just scans the full log; the page is a slice of it.
+    const all = await this.getMessages(roomId, 0);
+    const upTo = before === undefined ? all : all.filter((m) => m.seq < before);
+    return upTo.slice(-limit);
+  }
+
+  async listRooms(): Promise<RoomRecord[]> {
+    let entries: string[];
+    try {
+      entries = await readdir(this.baseDir);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+    const rooms: RoomRecord[] = [];
+    for (const entry of entries) {
+      const meta = await this.readMeta(entry);
+      if (meta) rooms.push({ ...meta, members: [...meta.members] });
+    }
+    // roomId tiebreak keeps the order deterministic when two Rooms share a ms.
+    return rooms.sort((a, b) => a.createdAt - b.createdAt || a.roomId.localeCompare(b.roomId));
   }
 }

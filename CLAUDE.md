@@ -44,7 +44,8 @@ Agent (Claude Code / Cursor / Codex / …)
 ```
 
 - `src/server/app.ts` — Hono app: `/mcp` (auth + Streamable HTTP) + `/health`.
-- `src/server/tools.ts` — MCP server factory: the 5 tools + Room resource; identity bound per request (ADR 0007).
+- `src/server/tools.ts` — MCP server factory: the 6 tools + Room resource; identity bound per request (ADR 0007).
+- `src/server/view.ts` + `page*.ts` — the human view: `/`, `/room/:id`, `/api/*`, live SSE stream (ADR 0008). `auth.ts` resolves request→Member for both surfaces.
 - `src/store/` — `Store` interface + SQLite (default) and JSONL implementations (the persistence seam).
 - `src/domain/types.ts` — Room, Member, Message, Seq, errors, limits.
 - `src/config.ts` — fail-closed auth config loader (ADR 0005).

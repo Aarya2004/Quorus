@@ -117,6 +117,33 @@ export class SqliteStore implements Store {
     return rows.map((r) => ({ seq: r.seq, from: r.from_member, text: r.text, ts: r.ts }));
   }
 
+  async getMessagesBefore(
+    roomId: string,
+    before: number | undefined,
+    limit: number,
+  ): Promise<StoredMessage[]> {
+    const exists = this.db.prepare("SELECT 1 FROM rooms WHERE room_id = ?").get(roomId);
+    if (!exists) throw new RoomNotFoundError(roomId);
+    const rows = this.db
+      .prepare(
+        "SELECT seq, from_member, text, ts FROM messages WHERE room_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?",
+      )
+      .all(roomId, before ?? Number.MAX_SAFE_INTEGER, limit) as unknown as MessageRow[];
+    return rows.reverse().map((r) => ({ seq: r.seq, from: r.from_member, text: r.text, ts: r.ts }));
+  }
+
+  async listRooms(): Promise<RoomRecord[]> {
+    const rows = this.db
+      .prepare("SELECT room_id, name, created_at FROM rooms ORDER BY created_at, rowid")
+      .all() as unknown as { room_id: string; name: string; created_at: number }[];
+    return rows.map((r) => ({
+      roomId: r.room_id,
+      name: r.name,
+      members: this.membersOf(r.room_id),
+      createdAt: r.created_at,
+    }));
+  }
+
   /** Release the database handle. */
   close(): void {
     this.db.close();

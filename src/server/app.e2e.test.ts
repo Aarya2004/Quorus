@@ -86,6 +86,13 @@ describe("open mode (legacy 2025-era client)", () => {
     const transport = new StreamableHTTPClientTransport(url); // no x-quorus-member header
     await expect(client.connect(transport)).rejects.toBeDefined();
   });
+
+  it("accepts a Bearer name as the self-asserted identity (the view's dev path)", async () => {
+    const res = await fetch(new URL("/api/me", url), {
+      headers: { authorization: "Bearer casey" },
+    });
+    expect(await res.json()).toEqual({ member: "casey" });
+  });
 });
 
 describe("modern era (2026-07-28)", () => {
@@ -141,6 +148,119 @@ describe("modern era (2026-07-28)", () => {
     await sub.close();
     await alice.close();
     await bob.close();
+  });
+});
+
+describe("human view API", () => {
+  let url: URL;
+  let close: () => void;
+  const auth: AuthConfig = { mode: "token", tokens: new Map([["tk_alice", "alice"]]) };
+  beforeAll(async () => ({ url, close } = await startApp(auth)));
+  afterAll(() => close());
+
+  const api = (path: string, init?: RequestInit) =>
+    fetch(new URL(path, url), {
+      ...init,
+      headers: { authorization: "Bearer tk_alice", ...(init?.headers ?? {}) },
+    });
+
+  it("rejects view requests without a valid Member Token", async () => {
+    const res = await fetch(new URL("/api/rooms", url));
+    expect(res.status).toBe(401);
+  });
+
+  it("identifies the token's Member for the view chrome", async () => {
+    expect(await (await api("/api/me")).json()).toEqual({ member: "alice" });
+  });
+
+  it("serves the view page shell at / and /room/:id without auth", async () => {
+    const index = await fetch(new URL("/", url));
+    expect(index.status).toBe(200);
+    expect(await index.text()).toContain("Quorus");
+    const room = await fetch(new URL("/room/r_whatever", url));
+    expect(room.status).toBe(200);
+  });
+
+  it("lists Rooms and serves a Room page with backward pagination", async () => {
+    expect(await (await api("/api/rooms")).json()).toEqual({ rooms: [] });
+
+    const alice = await connectV2(url, { authorization: "Bearer tk_alice" });
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "view" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    for (let i = 1; i <= 5; i++) {
+      await alice.callTool({ name: "send_message", arguments: { room_id: roomId, text: `m${i}` } });
+    }
+    await alice.close();
+
+    const { rooms } = (await (await api("/api/rooms")).json()) as Any;
+    expect(rooms[0]).toMatchObject({ roomId, name: "view", latestSeq: 5 });
+
+    const page = (await (await api(`/api/rooms/${roomId}?limit=2`)).json()) as Any;
+    expect(page).toMatchObject({ roomId, name: "view", members: ["alice"] });
+    expect(page.messages.map((m: Any) => m.text)).toEqual(["m4", "m5"]);
+
+    const older = (await (await api(`/api/rooms/${roomId}?limit=2&before=4`)).json()) as Any;
+    expect(older.messages.map((m: Any) => m.text)).toEqual(["m2", "m3"]);
+
+    expect((await api("/api/rooms/r_nope")).status).toBe(404);
+  });
+
+  it("posting from the view joins the Member and streams live to a watcher", async () => {
+    const alice = await connectV2(url, { authorization: "Bearer tk_alice" });
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "live" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    await alice.close();
+
+    // Watcher: hold the stream open, collect data frames.
+    const ctrl = new AbortController();
+    const streamRes = await api(`/api/rooms/${roomId}/stream`, { signal: ctrl.signal });
+    expect(streamRes.status).toBe(200);
+    const reader = streamRes.body?.getReader();
+    const firstFrame = (async () => {
+      const dec = new TextDecoder();
+      let buf = "";
+      while (reader) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const m = buf.match(/data: (.+)\n/);
+        if (m?.[1]) return JSON.parse(m[1]);
+      }
+      throw new Error("stream ended without data");
+    })();
+
+    // Steer: post via the view API. `alice` created the room; post as alice.
+    const post = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello from the view" }),
+    });
+    expect(post.status).toBe(200);
+    expect(((await post.json()) as Any).seq).toBe(1);
+
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("no stream frame in 2s")), 2000),
+    );
+    const frame = (await Promise.race([firstFrame, timeout])) as Any;
+    expect(frame).toMatchObject({ seq: 1, from: "alice", text: "hello from the view" });
+    ctrl.abort();
+
+    // Posting joined alice (she was already a member as creator) — assert roster honest.
+    const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(page.members).toContain("alice");
+  });
+
+  it("rejects an empty or oversize view post", async () => {
+    const alice = await connectV2(url, { authorization: "Bearer tk_alice" });
+    const created = await alice.callTool({ name: "create_room", arguments: {} });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    await alice.close();
+    const empty = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "" }),
+    });
+    expect(empty.status).toBe(400);
   });
 });
 

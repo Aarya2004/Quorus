@@ -24,4 +24,18 @@ export interface Store {
 
   /** Messages with `seq > since` (default 0 = all). Throws if the Room is unknown. */
   getMessages(roomId: string, since?: number): Promise<StoredMessage[]>;
+
+  /**
+   * Backward page for lazy history (ADR 0008): up to `limit` Messages with
+   * `seq < before`, ascending; `before` undefined means the newest `limit`.
+   * Throws if the Room is unknown.
+   */
+  getMessagesBefore(
+    roomId: string,
+    before: number | undefined,
+    limit: number,
+  ): Promise<StoredMessage[]>;
+
+  /** All Rooms, oldest first. */
+  listRooms(): Promise<RoomRecord[]>;
 }

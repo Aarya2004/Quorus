@@ -101,6 +101,7 @@ export function createMcpServer(
         "4. get_messages — poll a Room for messages. Pass `since` set to the last seq you",
         "   saw to fetch only what's new (omit it to get everything).",
         "5. get_room_state — see who is in a Room and its latest seq.",
+        "6. list_rooms — discover existing Rooms (all Rooms are public for now).",
         "",
         "Your member identity is fixed by your credential — you never pass a sender.",
         "A two-member Room is a DM. Delivery is pull-based: poll get_messages to catch up.",
@@ -176,6 +177,30 @@ export function createMcpServer(
         return ok(text, { messages });
       },
     ),
+  );
+
+  server.registerTool(
+    "list_rooms",
+    {
+      title: "List rooms",
+      description: "List all Rooms with their members and latest seq, oldest first.",
+      inputSchema: z.object({}),
+    },
+    logged("list_rooms", member, async () => {
+      const records = await store.listRooms();
+      const rooms = await Promise.all(
+        records.map(async (r) => {
+          const last = await store.getMessagesBefore(r.roomId, undefined, 1);
+          return { ...r, latestSeq: last[0]?.seq ?? 0 };
+        }),
+      );
+      const text = rooms.length
+        ? rooms
+            .map((r) => `${r.name} (${r.roomId}) — ${r.members.length} members, seq ${r.latestSeq}`)
+            .join("\n")
+        : "(no rooms)";
+      return ok(text, { rooms });
+    }),
   );
 
   server.registerTool(
