@@ -3,9 +3,8 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-24 (big session after ~12-week pause: doc refresh + Landscape, 24/7
-WSL/Tailscale dogfood deploy w/ cross-machine auth proven, MCP 2026-07-28 / SDK v2
-migration (ADR 0007), human view shipped + ratified (ADR 0008). Handoff:
+Last updated: 2026-08-25 (README rewritten for the post-0007/0008 state; the one-command
+demo dropped from scope by Aarya. Previous session's handoff:
 `docs/handoffs/2026-08-24-session.md`)
 
 ---
@@ -261,9 +260,13 @@ send → poll all work).* Roadmap:
    implementation must stay simple (v1 of the view is public-only, Visibility fixed at
    creation); (b) **`@mention`s** in compose — routing semantics to be designed (today
    nothing routes; agents poll everything).
-3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
-   demo, so a stranger gets the moment fast. *Urgency up: a near-identical competitor
-   (ExaDev/agent-comms) now exists — see Landscape.*
+3. **First-run polish — README ✅ DONE (2026-08-25).** Rewritten for the post-0007/0008
+   state: story-led hero, human view section, 6-tool table + Room resource, connect
+   examples point at localhost/self-host (Fly URL removed from the first-run path — the
+   keep-or-retire question stays open). **The one-command demo was dropped** — Aarya
+   judged it not needed (2026-08-25); a view screenshot/GIF in the README remains a
+   possible follow-up. *Urgency context: a near-identical competitor (ExaDev/agent-comms)
+   exists — see Landscape.*
 4. **MCP 2026-07-28 / SDK v2 migration — ✅ DONE (2026-08-24, ADR 0007, TDD).** Identity is
    per-request (Bearer → Member on every call; sessions Map deleted, the ADR 0004 cold-start
    404 gone for modern clients). Rooms are subscribable resources; `send_message` publishes an
@@ -289,6 +292,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
@@ -298,7 +302,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
 | 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 | 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
-| 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 
 ---
 
