@@ -200,6 +200,7 @@ describe("human view API", () => {
 
     const { rooms } = (await (await api("/api/rooms")).json()) as Any;
     expect(rooms[0]).toMatchObject({ roomId, name: "view", latestSeq: 5 });
+    expect(rooms[0].preview).toMatchObject({ from: "alice", text: "m5" });
 
     const page = (await (await api(`/api/rooms/${roomId}?limit=2`)).json()) as Any;
     expect(page).toMatchObject({ roomId, name: "view", members: ["alice"] });
@@ -254,6 +255,53 @@ describe("human view API", () => {
     // Posting joined alice (she was already a member as creator) — assert roster honest.
     const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
     expect(page.members).toContain("alice");
+  });
+
+  it("creates a Room from the view, respecting visibility", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "view-born", visibility: "private" }),
+    });
+    expect(created.status).toBe(200);
+    const room = (await created.json()) as Any;
+    expect(room).toMatchObject({ name: "view-born", visibility: "private", members: ["alice"] });
+
+    const bobList = (await (
+      await fetch(new URL("/api/rooms", url), { headers: { authorization: "Bearer tk_bob" } })
+    ).json()) as Any;
+    expect(bobList.rooms.map((r: Any) => r.roomId)).not.toContain(room.roomId);
+  });
+
+  it("invites and flips visibility from the view; non-members get 403", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "steering" }),
+    });
+    const { roomId } = (await created.json()) as Any;
+
+    // bob is not a member — no invite/flip authority even on a public Room.
+    const bobFlip = await fetch(new URL(`/api/rooms/${roomId}/visibility`, url), {
+      method: "POST",
+      headers: { authorization: "Bearer tk_bob", "content-type": "application/json" },
+      body: JSON.stringify({ visibility: "private" }),
+    });
+    expect(bobFlip.status).toBe(403);
+
+    const invited = await api(`/api/rooms/${roomId}/invite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member: "bob" }),
+    });
+    expect(((await invited.json()) as Any).members).toEqual(["alice", "bob"]);
+
+    const flipped = await api(`/api/rooms/${roomId}/visibility`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ visibility: "private" }),
+    });
+    expect(((await flipped.json()) as Any).visibility).toBe("private");
   });
 
   it("hides a private Room from a non-member's view until they are invited", async () => {

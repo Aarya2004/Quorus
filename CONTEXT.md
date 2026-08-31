@@ -3,10 +3,11 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-25 (README rewritten for the post-0007/0008 state — demo dropped from
-scope by Aarya; **private Rooms shipped** (ADR 0009, TDD): roster-gated Visibility,
-`invite_member` + `set_visibility` → 8 tools, 77 tests. Previous session's handoff:
-`docs/handoffs/2026-08-24-session.md`)
+Last updated: 2026-08-31 (**view v2 shipped** — chat-native "session ledger" replaces the
+rejected listening-post aesthetic (ADR 0010, research-backed, ratified on mocks): coalesced
+sender blocks, gap headers, seq-anchored unread divider, curated sender palette; view gains
+create/invite/visibility endpoints. Catch-up summaries decided + deferred (ADR 0011).
+79 tests. Earlier: private Rooms ADR 0009 (2026-08-25), README rewrite.)
 
 ---
 
@@ -190,12 +191,12 @@ src/
   suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
   server/tools.ts        # MCP server factory: 8 tools + Room resource; identity bound per request
   server/auth.ts         # shared request→Member resolution (open + token modes)
-  server/view.ts         # human view API: page routes, /api/*, live SSE stream (ADR 0008)
+  server/view.ts         # human view API: page routes, /api/* incl. create/invite/visibility, live SSE stream (ADR 0008/0010)
   server/page.ts         # human view shell (HTML+CSS, self-contained — no CDN)
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 77 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
+  *.test.ts              # 79 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -267,6 +268,20 @@ send → poll all work).* Roadmap:
    any-Member authority (provisional — revisit needs a new ADR), non-members get
    not-found everywhere; (b) **`@mention`s** in compose — routing semantics to be
    designed (today nothing routes; agents poll everything).
+   **View v2 — ✅ SHIPPED 2026-08-31 (ADR 0010, TDD).** Aarya rejected the listening-post
+   aesthetic ("too much like Warp"); chat-UI research (primary sources,
+   `docs/research/2026-08-30-chat-ui-patterns.md`) fed three candidate directions; Aarya
+   picked "Direction B — session ledger" and ratified high-fidelity mocks
+   (`docs/wireframes/`). Shipped: light chat-native page (coalesced sender blocks,
+   gap headers at silences, seq-anchored unread divider + localStorage last-seen,
+   curated 8-color sender palette, composer announces send-joins), plus view endpoints
+   `POST /api/rooms`, `/api/rooms/:id/invite`, `/api/rooms/:id/visibility` and picker
+   previews. **Catch-up summaries (ADR 0011): decided, implementation deferred** —
+   optional `claude-haiku-4-5` summary of the unread span, opt-in via
+   `QUORUS_SUMMARY_API_KEY`, cache by (room, from, to); build after v2 settles.
+   **Seq stays** — Aarya questioned its scalability 2026-08-31; resolved: per-Room
+   counters shard like Kafka partition offsets, single-writer-per-room is the committed
+   architecture (ADR 0002), and seq is load-bearing for delivery truth/unread/summaries.
 3. **First-run polish — README ✅ DONE (2026-08-25).** Rewritten for the post-0007/0008
    state: story-led hero, human view section, 6-tool table + Room resource, connect
    examples point at localhost/self-host (Fly URL removed from the first-run path — the
@@ -299,6 +314,8 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
+| 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
 | 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
 | 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
@@ -307,8 +324,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 | 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
-| 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
-| 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
 
 ---
 

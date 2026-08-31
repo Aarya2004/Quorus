@@ -3,7 +3,7 @@ import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { AuthConfig } from "../config";
-import { canAccess, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import { canAccess, MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
 import { resolveMember } from "./auth";
@@ -14,6 +14,14 @@ const DEFAULT_PAGE = 200;
 const MAX_PAGE = 500;
 
 const postBody = z.object({ text: z.string().min(1).max(MAX_TEXT_LENGTH) });
+const createBody = z.object({
+  name: z.string().max(MAX_NAME_LENGTH).optional(),
+  visibility: z.enum(["public", "private"]).optional(),
+});
+const inviteBody = z.object({ member: z.string().min(1).max(MAX_NAME_LENGTH) });
+const visibilityBody = z.object({ visibility: z.enum(["public", "private"]) });
+/** Preview length for the picker's last-message line. */
+const PREVIEW_CHARS = 140;
 
 /**
  * The human view's JSON + stream API (ADR 0008). Same Member-Token auth as
@@ -49,10 +57,62 @@ export function registerViewApi(
     const rooms = await Promise.all(
       records.map(async (r) => {
         const last = await store.getMessagesBefore(r.roomId, undefined, 1);
-        return { ...r, latestSeq: last[0]?.seq ?? 0 };
+        const preview = last[0]
+          ? { from: last[0].from, text: last[0].text.slice(0, PREVIEW_CHARS), ts: last[0].ts }
+          : null;
+        return { ...r, latestSeq: last[0]?.seq ?? 0, preview };
       }),
     );
     return c.json({ rooms });
+  });
+
+  app.post("/api/rooms", async (c) => {
+    const member = authed(c);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const parsed = createBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: "invalid room" }, 400);
+    const room = await store.createRoom(
+      parsed.data.name?.trim() || "room",
+      member,
+      parsed.data.visibility,
+    );
+    log.info("view.create", { member, room: room.roomId, visibility: room.visibility });
+    return c.json(room);
+  });
+
+  // Shared gate for the two member-only mutations (ADR 0009/0010): a private
+  // Room a non-member probes is "not found"; a public Room still requires
+  // roster membership to invite or flip visibility.
+  const memberRoom = async (c: Context, member: string, roomId: string) => {
+    const room = await store.getRoom(roomId);
+    if (!room || !canAccess(room, member)) return { err: c.json({ error: "room not found" }, 404) };
+    if (!room.members.includes(member))
+      return { err: c.json({ error: "only members can do this" }, 403) };
+    return { room };
+  };
+
+  app.post("/api/rooms/:id/invite", async (c) => {
+    const member = authed(c);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const parsed = inviteBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: "invalid member name" }, 400);
+    const gate = await memberRoom(c, member, c.req.param("id"));
+    if (gate.err) return gate.err;
+    const updated = await store.joinRoom(gate.room.roomId, parsed.data.member);
+    log.info("view.invite", { member, room: updated.roomId, invitee: parsed.data.member });
+    return c.json(updated);
+  });
+
+  app.post("/api/rooms/:id/visibility", async (c) => {
+    const member = authed(c);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const parsed = visibilityBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: "invalid visibility" }, 400);
+    const gate = await memberRoom(c, member, c.req.param("id"));
+    if (gate.err) return gate.err;
+    const updated = await store.setVisibility(gate.room.roomId, parsed.data.visibility);
+    log.info("view.visibility", { member, room: updated.roomId, visibility: updated.visibility });
+    return c.json(updated);
   });
 
   app.get("/api/rooms/:id", async (c) => {
