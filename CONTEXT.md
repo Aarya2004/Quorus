@@ -3,11 +3,12 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-31 (**view v2 shipped** — chat-native "session ledger" replaces the
-rejected listening-post aesthetic (ADR 0010, research-backed, ratified on mocks): coalesced
-sender blocks, gap headers, seq-anchored unread divider, curated sender palette; view gains
-create/invite/visibility endpoints. Catch-up summaries decided + deferred (ADR 0011).
-79 tests. Earlier: private Rooms ADR 0009 (2026-08-25), README rewrite.)
+Last updated: 2026-08-31 (**@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
+subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
+`mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
+autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
+97 tests. Earlier same day: view v2 shipped (ADR 0010); catch-up summaries decided +
+deferred (ADR 0011).)
 
 ---
 
@@ -167,8 +168,17 @@ request), with the SDK's built-in stateless fallback serving 2025-era clients (A
 store is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is
 kept as the zero-config dev alternative, and both must pass one shared contract suite.
 
-**Tools (8):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`,
-`list_rooms`, `invite_member`, `set_visibility`.
+**Tools (8):** `create_room`, `join_room`, `send_message(…, mentions?)`,
+`get_messages(…, since?, mentions_me?)`, `get_room_state`, `list_rooms`, `invite_member`,
+`set_visibility`.
+**Mentions (ADR 0012):** explicit attention-routing metadata, never parsed from prose —
+`send_message`/view post take a `mentions` array validated against the Room roster (any
+unknown name fails the send loudly; Watchers are unmentionable until they first send);
+`get_messages` with `mentions_me: true` filters to the caller's mentions off the same seq
+cursor (identity from the credential). The view renders line-level "for you" emphasis,
+cosmetic `@token` highlighting, and roster autocomplete that sets the param. Storage:
+SQLite `message_mentions` join table (created `IF NOT EXISTS`; pre-0012 databases open
+unchanged), JSONL inline array.
 **Visibility (ADR 0009):** Rooms are public by default; a private Room is roster-gated — only
 its Members may read, send, or discover it (indistinguishable from nonexistent to anyone
 else; entry via `invite_member`; any Member may invite or flip Visibility). One shared
@@ -196,7 +206,7 @@ src/
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 79 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
+  *.test.ts              # 97 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -266,8 +276,12 @@ send → poll all work).* Roadmap:
    **Next after this ships (priority):** (a) **private Rooms — ✅ SHIPPED 2026-08-25
    (ADR 0009, TDD)** — roster-gated changeable Visibility, direct-add `invite_member`,
    any-Member authority (provisional — revisit needs a new ADR), non-members get
-   not-found everywhere; (b) **`@mention`s** in compose — routing semantics to be
-   designed (today nothing routes; agents poll everything).
+   not-found everywhere; (b) **`@mention`s — ✅ SHIPPED 2026-08-31 (ADR 0012, wayfinder
+   map `docs/wayfinder/mentions/`, TDD, codex subagents implementing)** — explicit
+   roster-validated `mentions` metadata on send (tool + view), `mentions_me` poll
+   filter, view emphasis/highlight/autocomplete; dogfood volume migrated untouched.
+   Follow-ups on record in the ADR: param-adoption benchmark, broadcast forms,
+   picker mention badge. A view papercut pass awaits Aarya watching real traffic.
    **View v2 — ✅ SHIPPED 2026-08-31 (ADR 0010, TDD).** Aarya rejected the listening-post
    aesthetic ("too much like Warp"); chat-UI research (primary sources,
    `docs/research/2026-08-30-chat-ui-patterns.md`) fed three candidate directions; Aarya
@@ -314,6 +328,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-31 | feat: @mentions (ADR 0012, TDD, codex-implemented) — roster-validated mentions metadata send→store→query→view, mentions_me filter, view emphasis + autocomplete; dogfood rolled |
 | 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
 | 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
 | 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
@@ -323,7 +338,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
-| 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
 
 ---
 

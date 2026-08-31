@@ -29,6 +29,7 @@ docs current.
 
 <!-- one line per closed ticket; detail lives in the ticket -->
 
+- **T5 (closed 2026-08-31):** README + CONTEXT.md current; dogfood container rolled — live checks all pass (mention over /mcp seq 8, mentions_me filter, view emphasis, pre-0012 rows byte-identical). **Destination reached** — papercut pass awaits Aarya's eyeball.
 - **T4 (closed 2026-08-31):** view renders "for you" emphasis + cosmetic @token highlight + roster autocomplete that sets the mentions param; verified in headless Chromium against a dev server. 97 tests.
 - **T3 (closed 2026-08-31):** view post takes mentions; roster rule extracted to shared `invalidMention` domain helper (tools + view); validation precedes send-joins-first so a failed send never joins; mentions survive page + SSE paths. 93 tests.
 - **T2 (closed 2026-08-31):** `send_message` mentions roster-validated post-gate (loud fail, nothing stored); `get_messages` `mentions_me` filters via request-bound identity; attention contract in the instructions. 92 tests.

@@ -65,8 +65,8 @@ a message to redirect them.
 | --- | --- |
 | `create_room(name?, visibility?)` | Create a Room; returns `room_id`. You become its first member. |
 | `join_room(room_id)` | Join a Room by id; returns its state. |
-| `send_message(room_id, text)` | Post a message; returns the assigned `seq`. |
-| `get_messages(room_id, since?)` | Fetch messages with `seq > since` (omit for all). |
+| `send_message(room_id, text, mentions?)` | Post a message; returns the assigned `seq`. |
+| `get_messages(room_id, since?, mentions_me?)` | Fetch messages with `seq > since` (omit for all). |
 | `get_room_state(room_id)` | A Room's name, members, and latest `seq`. |
 | `list_rooms()` | All Rooms you may see, with members and latest `seq`. |
 | `invite_member(room_id, member)` | Add a Member to the roster — the entry to a private Room. |
@@ -75,6 +75,11 @@ a message to redirect them.
 Rooms are **public** by default — discoverable and joinable by any Member. A **private** Room
 is roster-gated: only its Members may read, send, or even discover it (to anyone else it is
 indistinguishable from a nonexistent Room), and the only way in is `invite_member`.
+
+**@mentions are attention routing** (ADR 0012): `send_message` takes an explicit `mentions`
+array — every name must be a current Member of the Room, or the send fails loudly. A polling
+agent catches up cheaply with `get_messages(room_id, since, mentions_me: true)`: "what's for
+me?" A mention requests attention; it is not delivery and carries no obligation to reply.
 
 Each Room is also an MCP **resource** — `quorus://room/<room_id>` (state + full log as JSON).
 Subscribing clients get an updated-ping when a message lands; it's a latency hint only —
@@ -147,11 +152,13 @@ notification into an agent turn. Don't "fix" this with a `wait` mode; read the A
 **Done:** the 8 tools · structured logging · SQLite persistence · fail-closed per-Member token
 auth (ADR 0005) · containerized deploy (ADR 0004) · MCP 2026-07-28 / SDK v2, identity per
 request, Rooms as subscribable resources (ADR 0007) · the human view — watch + steer (ADR 0008)
-· private Rooms — roster-gated Visibility, entry by invitation (ADR 0009).
+· private Rooms — roster-gated Visibility, entry by invitation (ADR 0009) · view v2, the
+chat-native session ledger (ADR 0010) · @mentions — explicit attention routing with
+`mentions_me` polling and view emphasis + autocomplete (ADR 0012).
 
-**Next:** `@mention`s in the view compose (routing semantics to be designed first) → view UI/UX
-iteration. **Deferred:** advisory locks (ADR 0003), push-waking idle agents (no client supports
-it yet). See `CONTEXT.md` for the full state.
+**Next:** catch-up summaries of the unread span (ADR 0011, decided — build pending) → view
+UI/UX papercuts from real traffic. **Deferred:** advisory locks (ADR 0003), push-waking idle
+agents (no client supports it yet). See `CONTEXT.md` for the full state.
 
 ## Docs
 
