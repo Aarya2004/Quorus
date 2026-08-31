@@ -234,8 +234,10 @@ send → poll all work).* Roadmap:
 
 1. **Confirm the auth'd build live — ✅ DONE (2026-08-24, via self-host).** A 24/7
    dogfood deploy runs as a Docker container (`--restart unless-stopped`, named volume at
-   `/data`) on Aarya's WSL box `aarya-desktop`, reachable over Tailscale at
-   `100.69.22.8:8787`. Token mode verified over the tailnet (bad token → 401, valid token
+   `/data`) on Aarya's WSL box, reachable over Tailscale through the Windows node at
+   `aarya-desktop-windows.tail63709c.ts.net:8787` (`100.117.162.109:8787`). The service
+   moved from the retired WSL Tailscale endpoint `100.69.22.8:8787` on 2026-08-29. Token
+   mode verified over the tailnet (bad token → 401, valid token
    with contradicting `x-quorus-member` → 401, valid token → session), and **cross-machine
    coordination re-proven with auth on**: `aarya-wsl` (WSL) and `aarya-mac` (macOS, Claude
    Code) exchanged Messages seq 1–3 in Room `r_6d8ea3db436df3ef` ("wsl-mac-bridge"), with
