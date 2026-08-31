@@ -2,8 +2,8 @@
 id: T1
 title: Store layer — mentions persist and filter
 label: wayfinder:task
-status: open
-assignee:
+status: closed
+assignee: claude-orchestrator
 blocked-by: []
 ---
 
@@ -23,3 +23,19 @@ blocked-by: []
 - JSONL: array inline on the message line; absent field normalizes.
 
 Done when the contract suite passes ×2 backends and typecheck/lint are green.
+
+## Resolution (2026-08-31)
+
+Implemented as specified (codex subagent coded, orchestrator wrote the failing contract
+tests first — red confirmed at 6 failures ×2 backends — then reviewed and gated).
+
+- `StoredMessage.mentions?: string[]` — absent (not `[]`) when none; empty input
+  normalizes to absent on both write and read; duplicates deduped via `Set` at append.
+- `Store.appendMessage(..., mentions?)` / `Store.getMessages(roomId, since?, mentioning?)`;
+  the `mentioning` filter composes with the seq cursor (cursor applies first).
+- SQLite: `message_mentions(room_id, seq, member)` PK + `idx_message_mentions_member
+  (room_id, member, seq)` index, both `IF NOT EXISTS`; the `messages` table is untouched,
+  so pre-0012 databases (dogfood volume) open unchanged. Filtered reads go through the
+  join table; both `getMessages` and `getMessagesBefore` hydrate mentions.
+- JSONL: array inline on the line only when non-empty; absent field normalizes on read.
+- Gates: 87 tests green (was 79; +4 contract tests ×2 backends), typecheck + lint clean.

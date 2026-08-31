@@ -163,6 +163,60 @@ export function storeContract(label: string, makeStore: (path: string) => Store)
         RoomNotFoundError,
       );
     });
+    it("round-trips mentions and reads unmentioned messages back clean", async () => {
+      const store = makeStore(await freshPath());
+      const { roomId } = await store.createRoom("planning", "alice");
+      await store.appendMessage(roomId, "alice", "plain");
+      const sent = await store.appendMessage(roomId, "alice", "hey bob", ["bob", "carol"]);
+      expect(sent.mentions).toEqual(["bob", "carol"]);
+
+      const read = await store.getMessages(roomId);
+      expect(read.map((m) => m.mentions)).toEqual([undefined, ["bob", "carol"]]);
+
+      // Backward pages carry mentions too (the view reads history this way).
+      const page = await store.getMessagesBefore(roomId, undefined, 2);
+      expect(page.map((m) => m.mentions)).toEqual([undefined, ["bob", "carol"]]);
+    });
+
+    it("normalizes an empty mentions array to absent", async () => {
+      const store = makeStore(await freshPath());
+      const { roomId } = await store.createRoom("planning", "alice");
+      const sent = await store.appendMessage(roomId, "alice", "hi", []);
+      expect(sent.mentions).toBeUndefined();
+      expect((await store.getMessages(roomId)).map((m) => m.mentions)).toEqual([undefined]);
+    });
+
+    it("filters by mentioned member and composes with the seq cursor", async () => {
+      const store = makeStore(await freshPath());
+      const { roomId } = await store.createRoom("planning", "alice");
+      await store.appendMessage(roomId, "alice", "for bob", ["bob"]);
+      await store.appendMessage(roomId, "alice", "for carol", ["carol"]);
+      await store.appendMessage(roomId, "alice", "plain");
+      await store.appendMessage(roomId, "alice", "for both", ["bob", "carol"]);
+
+      const forBob = await store.getMessages(roomId, 0, "bob");
+      expect(forBob.map((m) => m.text)).toEqual(["for bob", "for both"]);
+
+      // Cursor applies before the mention filter: only seq > 1 remains.
+      const afterCursor = await store.getMessages(roomId, 1, "bob");
+      expect(afterCursor.map((m) => m.text)).toEqual(["for both"]);
+
+      expect(await store.getMessages(roomId, 0, "nobody")).toEqual([]);
+    });
+
+    it("persists mentions across a fresh store instance at the same path", async () => {
+      const path = await freshPath();
+      const first = makeStore(path);
+      const { roomId } = await first.createRoom("planning", "alice");
+      await first.appendMessage(roomId, "alice", "hey", ["bob"]);
+      await first.appendMessage(roomId, "alice", "plain");
+      (first as { close?: () => void }).close?.();
+
+      const reopened = makeStore(path);
+      const reread = await reopened.getMessages(roomId);
+      expect(reread.map((m) => m.mentions)).toEqual([["bob"], undefined]);
+      expect((await reopened.getMessages(roomId, 0, "bob")).map((m) => m.text)).toEqual(["hey"]);
+    });
 
     it("persists across a fresh store instance at the same path", async () => {
       const path = await freshPath();

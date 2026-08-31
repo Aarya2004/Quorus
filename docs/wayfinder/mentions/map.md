@@ -29,7 +29,7 @@ docs current.
 
 <!-- one line per closed ticket; detail lives in the ticket -->
 
-(none yet — map freshly charted)
+- **T1 (closed 2026-08-31):** both stores carry + filter mentions behind the contract suite; absent-not-empty normalization, SQLite `message_mentions` join table `IF NOT EXISTS` (pre-0012 volumes open unchanged), `mentioning` composes with the seq cursor. 87 tests.
 
 ## Not yet specified
 

@@ -15,6 +15,8 @@ export interface StoredMessage {
   /** The Member who sent it. */
   from: string;
   text: string;
+  /** Members whose attention this Message requests. Absent when none. */
+  mentions?: string[];
   /** Unix epoch milliseconds. Display only — ordering comes from `seq`. */
   ts: number;
 }

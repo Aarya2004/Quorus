@@ -22,11 +22,16 @@ export interface Store {
   /** Add `member` to a Room's roster (idempotent). Throws if the Room is unknown. */
   joinRoom(roomId: string, member: string): Promise<RoomRecord>;
 
-  /** Append a Message, assigning the next `seq`. Throws if the Room is unknown. */
-  appendMessage(roomId: string, from: string, text: string): Promise<StoredMessage>;
+  /** Append a Message with optional mentions and the next `seq`. Throws for an unknown Room. */
+  appendMessage(
+    roomId: string,
+    from: string,
+    text: string,
+    mentions?: string[],
+  ): Promise<StoredMessage>;
 
-  /** Messages with `seq > since` (default 0 = all). Throws if the Room is unknown. */
-  getMessages(roomId: string, since?: number): Promise<StoredMessage[]>;
+  /** Messages after `since` (default 0), optionally mentioning a Member. Throws for unknown Rooms. */
+  getMessages(roomId: string, since?: number, mentioning?: string): Promise<StoredMessage[]>;
 
   /**
    * Backward page for lazy history (ADR 0008): up to `limit` Messages with
