@@ -76,6 +76,10 @@ button,input{font:inherit;color:inherit}
   font-family:var(--mono);font-size:10px;color:var(--dim);opacity:0;user-select:none}
 .line:hover .seq{opacity:1}
 .line.unread{border-left:3px solid var(--unread);padding-left:10px;margin-left:-13px}
+.line.forme{background:var(--accent-soft);border-left:3px solid var(--accent);
+  padding-left:10px;margin-left:-13px;border-radius:0 6px 6px 0}
+.mention{color:var(--accent);font-weight:600;background:var(--accent-soft);
+  border-radius:4px;padding:0 3px}
 .line a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .line pre{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--bg);
   border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:6px 0;
@@ -112,7 +116,14 @@ button,input{font:inherit;color:inherit}
   padding:10px 20px 12px}
 .compose .joinhint{max-width:72ch;margin:0 auto 6px;font-size:12px;color:var(--dim)}
 .compose .joinhint b{color:var(--accent)}
-.compose .inner{max-width:72ch;margin:0 auto;display:flex;gap:10px;align-items:center}
+.compose .inner{max-width:72ch;margin:0 auto;display:flex;gap:10px;align-items:center;
+  position:relative}
+.acmenu{position:absolute;left:0;right:0;bottom:48px;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:6px;z-index:5;
+  box-shadow:0 4px 16px rgba(44,41,37,.1)}
+.acmenu button{display:flex;width:100%;align-items:center;gap:8px;text-align:left;
+  font-size:13px;background:none;border:none;border-radius:6px;padding:7px 10px;cursor:pointer}
+.acmenu button:hover{background:var(--bg)}
 .compose .as{font-size:12px;color:var(--accent);font-weight:600;flex:none}
 .compose input{flex:1;background:var(--bg);border:1px solid var(--line);
   border-radius:8px;padding:9px 13px}
@@ -228,6 +239,7 @@ button,input{font:inherit;color:inherit}
   <footer class="compose hidden" id="compose">
     <p class="joinhint hidden" id="joinHint">watching — <b>sending will add you to this Room's roster</b></p>
     <div class="inner">
+      <div class="acmenu hidden" id="mentionMenu"></div>
       <span class="as" id="composeAs"></span>
       <input id="composeText" maxlength="8000" placeholder="Say something to the Room…"
         aria-label="Message">

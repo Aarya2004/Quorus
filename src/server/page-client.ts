@@ -121,10 +121,19 @@ export const CLIENT_JS = String.raw`
     const chip = $("newChip");
     const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 48;
 
+    function mentionHtml(html) {
+      const names = members.slice().sort((a, b) => b.length - a.length).map((name) => esc(name));
+      if (!names.length) return html;
+      const pattern = names.map((name) => name.replace(/[.*+?^{}$()|[\]\\]/g, "\\$&")).join("|");
+      const re = new RegExp("(^|[^\\w])@(" + pattern + ")(?=$|[^\\w])", "g");
+      return html.split(/(<[^>]+>)/).map((part) => part[0] === "<" ? part :
+        part.replace(re, '$1<span class="mention">@$2</span>')).join("");
+    }
     function lineHtml(m) {
       const unread = lastSeen > 0 && m.seq > lastSeen;
-      return '<div class="line' + (unread ? " unread" : "") + '">' +
-        '<span class="seq">' + m.seq + "</span>" + md(m.text) + "</div>";
+      const forme = m.mentions && m.mentions.includes(me);
+      return '<div class="line' + (unread ? " unread" : "") + (forme ? " forme" : "") + '">' +
+        '<span class="seq">' + m.seq + "</span>" + mentionHtml(md(m.text)) + "</div>";
     }
     // Rebuild the ledger: gap headers at silences, one block per sender run,
     // the unread divider anchored at the viewer's last-seen seq (ADR 0010).
@@ -309,16 +318,65 @@ export const CLIENT_JS = String.raw`
     listen();
 
     // compose (sending joins first, ADR 0008 — the hint above announces it)
+    const composer = $("composeText");
+    const mentionMenu = $("mentionMenu");
+    const pendingMentions = new Set();
+    let mentionStart = -1;
+    let mentionMatches = [];
+    function hideMentions() {
+      mentionMenu.classList.add("hidden");
+      mentionMatches = [];
+      mentionStart = -1;
+    }
+    function showMentions() {
+      if (!members.length) return hideMentions();
+      const caret = composer.selectionStart;
+      const match = composer.value.slice(0, caret).match(/@([^@]*)$/);
+      if (!match) return hideMentions();
+      const fragment = match[1].toLowerCase();
+      mentionMatches = members.filter((name) => name.toLowerCase().startsWith(fragment));
+      if (!mentionMatches.length) return hideMentions();
+      mentionStart = caret - match[0].length;
+      mentionMenu.innerHTML = mentionMatches.map((name, i) =>
+        '<button type="button" data-i="' + i + '">' + chipHtml(name, "mchip") + esc(name) +
+        "</button>").join("");
+      mentionMenu.classList.remove("hidden");
+    }
+    function chooseMention(index) {
+      const name = mentionMatches[index];
+      if (!name) return;
+      const caret = composer.selectionStart;
+      composer.value = composer.value.slice(0, mentionStart) + "@" + name + " " +
+        composer.value.slice(caret);
+      const next = mentionStart + name.length + 2;
+      composer.setSelectionRange(next, next);
+      pendingMentions.add(name);
+      hideMentions();
+      composer.focus();
+    }
+    composer.addEventListener("input", showMentions);
+    mentionMenu.addEventListener("click", (e) => {
+      const row = e.target.closest("button");
+      if (row) chooseMention(Number(row.dataset.i));
+    });
     async function send() {
-      const text = $("composeText").value.trim();
+      const text = composer.value.trim();
       if (!text) return;
-      $("composeText").value = "";
-      const r = await post("/api/rooms/" + roomId + "/messages", { text });
+      const mentions = [...pendingMentions].filter((name) => text.includes("@" + name));
+      composer.value = "";
+      hideMentions();
+      const body = mentions.length ? { text, mentions } : { text };
+      const r = await post("/api/rooms/" + roomId + "/messages", body);
       if (r.status === 401) showGate();
-      else if (r.ok) refreshRoom();
+      else if (r.ok) { pendingMentions.clear(); refreshRoom(); }
+      else { composer.value = text; composer.focus(); }
     }
     $("composeSend").onclick = send;
-    $("composeText").addEventListener("keydown", (e) => {
+    composer.addEventListener("keydown", (e) => {
+      if (!mentionMenu.classList.contains("hidden")) {
+        if (e.key === "Escape") { e.preventDefault(); hideMentions(); return; }
+        if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); chooseMention(0); return; }
+      }
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
     });
   }
