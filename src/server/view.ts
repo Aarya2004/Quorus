@@ -3,7 +3,13 @@ import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { AuthConfig } from "../config";
-import { canAccess, MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import {
+  canAccess,
+  invalidMention,
+  MAX_NAME_LENGTH,
+  MAX_TEXT_LENGTH,
+  RoomNotFoundError,
+} from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
 import { resolveMember } from "./auth";
@@ -13,7 +19,10 @@ import { roomUri } from "./tools";
 const DEFAULT_PAGE = 200;
 const MAX_PAGE = 500;
 
-const postBody = z.object({ text: z.string().min(1).max(MAX_TEXT_LENGTH) });
+const postBody = z.object({
+  text: z.string().min(1).max(MAX_TEXT_LENGTH),
+  mentions: z.array(z.string().min(1).max(MAX_NAME_LENGTH)).optional(),
+});
 const createBody = z.object({
   name: z.string().max(MAX_NAME_LENGTH).optional(),
   visibility: z.enum(["public", "private"]).optional(),
@@ -144,9 +153,11 @@ export function registerViewApi(
     try {
       const room = await store.getRoom(roomId);
       if (!room || !canAccess(room, member)) return c.json({ error: "room not found" }, 404);
+      const nonmember = invalidMention(room, parsed.data.mentions);
+      if (nonmember) return c.json({ error: `${nonmember} is not a member of this room` }, 400);
       // Sending joins first (ADR 0008): the roster records who has spoken.
       await store.joinRoom(roomId, member);
-      const msg = await store.appendMessage(roomId, member, parsed.data.text);
+      const msg = await store.appendMessage(roomId, member, parsed.data.text, parsed.data.mentions);
       notifyRoomChanged(roomId);
       log.info("view.post", { member, room: roomId, seq: msg.seq });
       return c.json({ seq: msg.seq });

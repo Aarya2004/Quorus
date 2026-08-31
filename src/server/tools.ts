@@ -3,6 +3,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   canAccess,
+  invalidMention,
   MAX_NAME_LENGTH,
   MAX_TEXT_LENGTH,
   RoomNotFoundError,
@@ -252,7 +253,7 @@ export function createMcpServer(
         mentions?: string[];
       }) => {
         const room = await accessibleRoom(room_id);
-        const nonmember = mentions?.find((name) => !room.members.includes(name));
+        const nonmember = invalidMention(room, mentions);
         if (nonmember) return fail(`${nonmember} is not a member of this room`);
         const msg = await store.appendMessage(room_id, member, text, mentions);
         onRoomChanged?.(room_id);

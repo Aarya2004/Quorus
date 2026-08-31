@@ -257,6 +257,66 @@ describe("human view API", () => {
     expect(page.members).toContain("alice");
   });
 
+  it("posts mentions from the view, streams them live, and 400s unknown names", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "mentions" }),
+    });
+    const roomId = ((await created.json()) as Any).roomId as string;
+    await api(`/api/rooms/${roomId}/invite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member: "bob" }),
+    });
+
+    // Watcher: hold the stream open, collect the first data frame.
+    const ctrl = new AbortController();
+    const streamRes = await api(`/api/rooms/${roomId}/stream`, { signal: ctrl.signal });
+    const reader = streamRes.body?.getReader();
+    const firstFrame = (async () => {
+      const dec = new TextDecoder();
+      let buf = "";
+      while (reader) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const m = buf.match(/data: (.+)\n/);
+        if (m?.[1]) return JSON.parse(m[1]);
+      }
+      throw new Error("stream ended without data");
+    })();
+
+    const post = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hey @bob", mentions: ["bob"] }),
+    });
+    expect(post.status).toBe(200);
+
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("no stream frame in 2s")), 2000),
+    );
+    const frame = (await Promise.race([firstFrame, timeout])) as Any;
+    expect(frame).toMatchObject({ from: "alice", text: "hey @bob", mentions: ["bob"] });
+    ctrl.abort();
+
+    // The page payload carries mentions end to end as well.
+    const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(page.messages.map((m: Any) => m.mentions)).toEqual([["bob"]]);
+
+    // Unknown name: loud 400, nothing stored.
+    const bad = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hi", mentions: ["mallory"] }),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as Any).error).toBe("mallory is not a member of this room");
+    const after = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(after.messages).toHaveLength(1);
+  });
+
   it("creates a Room from the view, respecting visibility", async () => {
     const created = await api("/api/rooms", {
       method: "POST",

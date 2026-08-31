@@ -29,6 +29,7 @@ docs current.
 
 <!-- one line per closed ticket; detail lives in the ticket -->
 
+- **T3 (closed 2026-08-31):** view post takes mentions; roster rule extracted to shared `invalidMention` domain helper (tools + view); validation precedes send-joins-first so a failed send never joins; mentions survive page + SSE paths. 93 tests.
 - **T2 (closed 2026-08-31):** `send_message` mentions roster-validated post-gate (loud fail, nothing stored); `get_messages` `mentions_me` filters via request-bound identity; attention contract in the instructions. 92 tests.
 - **T1 (closed 2026-08-31):** both stores carry + filter mentions behind the contract suite; absent-not-empty normalization, SQLite `message_mentions` join table `IF NOT EXISTS` (pre-0012 volumes open unchanged), `mentioning` composes with the seq cursor. 87 tests.
 

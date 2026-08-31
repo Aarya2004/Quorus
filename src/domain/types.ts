@@ -46,6 +46,11 @@ export function canAccess(room: RoomRecord, member: string): boolean {
   return room.visibility === "public" || room.members.includes(member);
 }
 
+/** The roster-only mention rule (ADR 0012); returns the first invalid name. */
+export function invalidMention(room: RoomRecord, mentions?: string[]): string | undefined {
+  return mentions?.find((name) => !room.members.includes(name));
+}
+
 /** Raised when an operation targets a Room that does not exist. */
 export class RoomNotFoundError extends Error {
   constructor(public readonly roomId: string) {
