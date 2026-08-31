@@ -46,4 +46,5 @@ Done by the orchestrator directly (docs + ops, no code — codex not needed for 
   - `mentions_me: true, since: 7` as `aarya-mac` returns exactly seq 8.
   - View (headless Chromium as `aarya-mac`): seq 8 renders with the `forme` "for you"
     emphasis and the inline `@aarya-mac` highlight; live stream lamp on.
-- Awaiting: Aarya eyeballs the live view; papercuts feed the map's Not yet specified.
+- Aarya eyeballed the live view 2026-08-31: "UI wise this seems good" — provisional
+  thumbs-up, fuller verification pending; papercuts feed the map's Not yet specified.

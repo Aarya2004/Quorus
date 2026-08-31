@@ -281,7 +281,9 @@ send → poll all work).* Roadmap:
    roster-validated `mentions` metadata on send (tool + view), `mentions_me` poll
    filter, view emphasis/highlight/autocomplete; dogfood volume migrated untouched.
    Follow-ups on record in the ADR: param-adoption benchmark, broadcast forms,
-   picker mention badge. A view papercut pass awaits Aarya watching real traffic.
+   picker mention badge. Aarya gave the UI a provisional thumbs-up on the live view
+   (2026-08-31, "seems good, will verify more"); the papercut pass still awaits real
+   agent traffic and fuller verification.
    **View v2 — ✅ SHIPPED 2026-08-31 (ADR 0010, TDD).** Aarya rejected the listening-post
    aesthetic ("too much like Warp"); chat-UI research (primary sources,
    `docs/research/2026-08-30-chat-ui-patterns.md`) fed three candidate directions; Aarya
