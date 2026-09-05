@@ -22,10 +22,10 @@ primary_region = 'yyz'
 [http_service]
   internal_port = 8787
   force_https = true
-  # Scale to zero when idle (cheapest dogfood host). A cold start wipes the
-  # in-memory MCP sessions Map, so a `404 unknown session` after idle is
-  # EXPECTED — clients re-initialize. Do not "fix" this by removing it; see
-  # ADR 0004. Revisit (durable sessions / always-warm) before public/alpha.
+  # Scale to zero when idle (cheapest dogfood host). Identity is bound per
+  # request since ADR 0007, so a cold start costs 2026-07-28 clients nothing
+  # but latency. Legacy (2025-era) clients still see ADR 0004's
+  # `404 unknown session` after idle and must re-initialize.
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0

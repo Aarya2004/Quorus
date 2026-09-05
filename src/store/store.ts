@@ -3,8 +3,9 @@ import type { RoomRecord, StoredMessage, Visibility } from "../domain/types";
 /**
  * Persistence seam for Quorus.
  *
- * Iteration 0 ships a JSONL-file implementation. Later iterations swap in
- * SQLite / Redis behind this same interface without touching the MCP layer.
+ * SQLite (`node:sqlite`) is the server default; the append-only JSONL store is
+ * the zero-config dev alternative. Both must pass the shared contract suite
+ * (`store-contract.ts`), so persistence can change without touching the MCP layer.
  *
  * Implementations must keep `seq` strictly monotonic per Room, even under
  * concurrent `appendMessage` calls.
