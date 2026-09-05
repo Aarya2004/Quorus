@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-31 (**@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
+Last updated: 2026-09-04 (**website rewritten** for the TypeScript rebuild — single-route Vite/React landing, copy mirrors README + ADRs, hero replays a Room; PR pending Aarya's review. Dead-code sweep: PRs #1/#2. 2026-08-31: **@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
 subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
 `mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
 autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
@@ -207,9 +207,9 @@ src/
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
   *.test.ts              # 97 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API)
-website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
-                         #   future read-only dashboard. Has a manual Vercel deploy workflow —
-                         #   do not dispatch it until the content is rewritten.
+website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
+                         #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
+                         #   workflow; www.quorus.dev domain status unverified.
 docs/adr/                # architecture decision records (0001–0006)
 docs/deploy.md           # Fly deploy + auth runbook
 Dockerfile, fly.toml     # container + single Fly machine, volume at /data
@@ -330,6 +330,8 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-09-04 | feat: website rewrite — clean/futuristic landing for the rebuild (Archivo wide display, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table, ADR index); old v1 marketing + fake console deleted |
+| 2026-09-04 | chore: dead-code sweep (PRs #1, #2) — only unused export was log.ts `Level`; comments stale since ADR 0007 fixed; suppress-warnings.ts confirmed live on Node 22 only |
 | 2026-08-31 | feat: @mentions (ADR 0012, TDD, codex-implemented) — roster-validated mentions metadata send→store→query→view, mentions_me filter, view emphasis + autocomplete; dogfood rolled |
 | 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
 | 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
@@ -338,8 +340,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
-| 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
-| 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 
 ---
 

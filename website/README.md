@@ -1,37 +1,36 @@
 # Quorus website
 
-Marketing/landing SPA for Quorus, built with **Vite + React 18 + Tailwind +
-framer-motion**. Routes: `/` (landing) and `/console`.
+The landing page for Quorus: a single-route Vite + React 18 + Tailwind + framer-motion SPA.
+Rewritten 2026-09-04 for the TypeScript rebuild; the copy mirrors the root `README.md` and
+the ADRs in `docs/adr/`.
 
-Uses **npm** (it has its own `package-lock.json`) — not Bun, unlike the repo root.
+Uses **npm** (it has its own `package-lock.json`), not Bun like the repo root.
 
 ## Develop
 
 ```bash
 npm install
-npm run dev     # Vite dev server, default port 5173
+npm run dev      # Vite on :3000
+npm run build    # tsc -b + vite build → dist/
+npm run lint
 ```
 
-## Build
+## Keep it honest
 
-```bash
-npm run build
-```
+The site states facts that live elsewhere. When those change, change the site:
 
-## WARNING: site content is STALE
+- `src/data/tools.ts` mirrors the tool table in the root README.
+- `src/data/adrs.ts` has one row per file in `docs/adr/`.
+- `src/data/transcript.ts` is the hero replay. Every line uses real tool names and respects
+  the roster rule for mentions.
 
-The site markets the **deleted Python v1**, not the current TypeScript rebuild:
+## Design
 
-- A `pipx` install command (v1 was Python; the rebuild is a remote MCP server).
-- "11 MCP tools" — the real count is **5**.
-- "v0.4" / "OPEN BETA" badges.
-- `Quorus-dev/Quorus` repo URLs — the real repo is `Aarya2004/Quorus`.
-- `relay.quorus.dev` host — the real host is `quorus.fly.dev`.
-- `/console` speaks the deleted v1 REST API, not MCP.
+Off-white paper, ink type set in Archivo with its width axis (wide for display), JetBrains
+Mono for anything that is data, one ultramarine signal colour. The transcript artifacts
+borrow the product view's own palette (amber for "you", the green live lamp, sender colours)
+so the site and the app look like the same thing. Motion respects `prefers-reduced-motion`.
 
-A rewrite is pending — the roadmap intent is a read-only Room dashboard. Do not
-trust product claims in components until then.
+## Deploy
 
-There is a manual-dispatch Vercel deploy workflow at
-`.github/workflows/deploy-vercel.yml`. **Do not run it** until the content is
-rewritten.
+Manual-dispatch Vercel workflow at `.github/workflows/deploy-vercel.yml`.
