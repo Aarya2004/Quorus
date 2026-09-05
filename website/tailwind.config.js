@@ -18,8 +18,8 @@ export default {
         live: "#4f9e63",
       },
       fontFamily: {
-        sans: ["Archivo", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["IBM Plex Sans", "system-ui", "sans-serif"],
+        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
       },
       maxWidth: { site: "1200px" },
     },

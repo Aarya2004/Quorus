@@ -3,9 +3,8 @@ import { GITHUB } from "../data/links";
 const LINKS = [
   ["#how", "How it works"],
   ["#tools", "Tools"],
-  ["#view", "Watch"],
+  ["#view", "The view"],
   ["#selfhost", "Self-host"],
-  ["#decisions", "Decisions"],
 ] as const;
 
 export default function Nav() {

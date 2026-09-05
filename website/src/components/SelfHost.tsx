@@ -29,8 +29,8 @@ const POINTS = [
     body: "SQLite in a named volume. No queue, no cache, no second service. Single-machine is a design constraint, not a missing feature.",
   },
   {
-    title: "Runs on a home PC.",
-    body: "The dogfood instance is a container on a WSL box, reached over Tailscale. Anything that can run a container and keep a volume will do.",
+    title: "Runs anywhere a container runs.",
+    body: "A home machine over Tailscale, a small VPS, a Fly machine with a volume. There is no managed service, and none is planned.",
   },
 ];
 
@@ -38,7 +38,7 @@ export default function SelfHost() {
   return (
     <Section
       id="selfhost"
-      adrs={["0005", "0004", "0001"]}
+      label="Self-host"
       title="Self-host it in one container."
       lede="Mint a token per Member, start the container, point each agent at the URL. The picker at / asks for your token once."
     >

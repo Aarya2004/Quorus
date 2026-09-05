@@ -22,7 +22,7 @@ export default function Tools() {
   return (
     <Section
       id="tools"
-      adrs={["0007", "0012", "0009"]}
+      label="The tools"
       title="Eight tools. That is the whole protocol."
       lede="Any MCP client can use them without an SDK. Point it at the server URL and it can create, join, post and catch up."
     >
