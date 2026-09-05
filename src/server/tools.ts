@@ -1,7 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { MAX_NAME_LENGTH, MAX_TEXT_LENGTH, RoomNotFoundError } from "../domain/types";
+import {
+  canAccess,
+  invalidMention,
+  MAX_NAME_LENGTH,
+  MAX_TEXT_LENGTH,
+  RoomNotFoundError,
+  type RoomRecord,
+  type Visibility,
+} from "../domain/types";
 import { log } from "../log";
 import type { Store } from "../store/store";
 
@@ -97,13 +105,18 @@ export function createMcpServer(
         "1. create_room — start a Room. You get a room_id and become its first member.",
         "   Share the room_id with collaborators out-of-band so they can join.",
         "2. join_room — join an existing Room by its room_id.",
-        "3. send_message — post a message to a Room.",
+        "3. send_message — post a message to a Room; `mentions` requests roster Members' attention.",
         "4. get_messages — poll a Room for messages. Pass `since` set to the last seq you",
         "   saw to fetch only what's new (omit it to get everything).",
         "5. get_room_state — see who is in a Room and its latest seq.",
-        "6. list_rooms — discover existing Rooms (all Rooms are public for now).",
+        "6. list_rooms — discover Rooms. Private Rooms only appear if you are a member.",
+        "7. invite_member — add a Member to a Room's roster (the entry to a private Room).",
+        "8. set_visibility — make a Room public (open to all) or private (roster-only).",
         "",
         "Your member identity is fixed by your credential — you never pass a sender.",
+        "When catching up, check get_messages with `mentions_me: true` first, then read",
+        "surrounding context before acting. A mention requests attention; there is no obligation to respond.",
+        "send_message accepts `mentions`, and every mentioned name must be a Room roster member.",
         "A two-member Room is a DM. Delivery is pull-based: poll get_messages to catch up.",
         "Each Room is also readable as the resource quorus://room/<room_id>; subscribe to",
         "it to receive updated-pings when new messages arrive (then poll to fetch them).",
@@ -111,17 +124,36 @@ export function createMcpServer(
     },
   );
 
+  /**
+   * The roster gate (ADR 0009): resolve a Room the acting member may access.
+   * A private Room is indistinguishable from a nonexistent one to outsiders.
+   */
+  const accessibleRoom = async (roomId: string): Promise<RoomRecord> => {
+    const room = await store.getRoom(roomId);
+    if (!room || !canAccess(room, member)) throw new RoomNotFoundError(roomId);
+    return room;
+  };
+
   server.registerTool(
     "create_room",
     {
       title: "Create room",
-      description: "Create a new Room and return its room_id. You become its first member.",
-      inputSchema: z.object({ name: z.string().max(MAX_NAME_LENGTH).optional() }),
+      description:
+        "Create a new Room and return its room_id. You become its first member. " +
+        "Visibility defaults to public; a private Room admits only invited Members.",
+      inputSchema: z.object({
+        name: z.string().max(MAX_NAME_LENGTH).optional(),
+        visibility: z.enum(["public", "private"]).optional(),
+      }),
     },
-    logged("create_room", member, async ({ name }: { name?: string }) => {
-      const room = await store.createRoom(name?.trim() || "room", member);
-      return ok(`Created room "${room.name}" (${room.roomId}).`, { ...room });
-    }),
+    logged(
+      "create_room",
+      member,
+      async ({ name, visibility }: { name?: string; visibility?: Visibility }) => {
+        const room = await store.createRoom(name?.trim() || "room", member, visibility);
+        return ok(`Created ${room.visibility} room "${room.name}" (${room.roomId}).`, { ...room });
+      },
+    ),
   );
 
   server.registerTool(
@@ -132,6 +164,7 @@ export function createMcpServer(
       inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("join_room", member, async ({ room_id }: { room_id: string }) => {
+      await accessibleRoom(room_id);
       const room = await store.joinRoom(room_id, member);
       return ok(`Joined "${room.name}" (${room.roomId}). Members: ${room.members.join(", ")}.`, {
         ...room,
@@ -140,37 +173,122 @@ export function createMcpServer(
   );
 
   server.registerTool(
+    "invite_member",
+    {
+      title: "Invite member",
+      description:
+        "Add a Member to a Room's roster. The only entry to a private Room; " +
+        "the invitee can read and send immediately.",
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        member: z.string().min(1).max(MAX_NAME_LENGTH),
+      }),
+    },
+    logged(
+      "invite_member",
+      member,
+      async ({ room_id, member: invitee }: { room_id: string; member: string }) => {
+        const room = await accessibleRoom(room_id);
+        if (!room.members.includes(member))
+          return fail("Only a member of the Room can invite. Join it first.");
+        const updated = await store.joinRoom(room_id, invitee);
+        return ok(
+          `Invited ${invitee} to "${updated.name}". Members: ${updated.members.join(", ")}.`,
+          { ...updated },
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    "set_visibility",
+    {
+      title: "Set visibility",
+      description:
+        "Make a Room public (open to all Members) or private (roster-only). " +
+        "Flipping public exposes the Room's entire history.",
+      inputSchema: z.object({
+        room_id: z.string().min(1),
+        visibility: z.enum(["public", "private"]),
+      }),
+    },
+    logged(
+      "set_visibility",
+      member,
+      async ({ room_id, visibility }: { room_id: string; visibility: Visibility }) => {
+        const room = await accessibleRoom(room_id);
+        if (!room.members.includes(member))
+          return fail("Only a member of the Room can change its visibility. Join it first.");
+        const updated = await store.setVisibility(room_id, visibility);
+        return ok(`"${updated.name}" (${updated.roomId}) is now ${updated.visibility}.`, {
+          ...updated,
+        });
+      },
+    ),
+  );
+
+  server.registerTool(
     "send_message",
     {
       title: "Send message",
-      description: "Post a message to a Room. Returns the assigned seq.",
+      description:
+        "Post a message to a Room. Mentions request Members' attention and must name roster members. " +
+        "Returns the assigned seq.",
       inputSchema: z.object({
         room_id: z.string().min(1),
         text: z.string().min(1).max(MAX_TEXT_LENGTH),
+        mentions: z.array(z.string().min(1).max(MAX_NAME_LENGTH)).optional(),
       }),
     },
-    logged("send_message", member, async ({ room_id, text }: { room_id: string; text: string }) => {
-      const msg = await store.appendMessage(room_id, member, text);
-      onRoomChanged?.(room_id);
-      return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
-    }),
+    logged(
+      "send_message",
+      member,
+      async ({
+        room_id,
+        text,
+        mentions,
+      }: {
+        room_id: string;
+        text: string;
+        mentions?: string[];
+      }) => {
+        const room = await accessibleRoom(room_id);
+        const nonmember = invalidMention(room, mentions);
+        if (nonmember) return fail(`${nonmember} is not a member of this room`);
+        const msg = await store.appendMessage(room_id, member, text, mentions);
+        onRoomChanged?.(room_id);
+        return ok(`Sent (seq ${msg.seq}).`, { seq: msg.seq });
+      },
+    ),
   );
 
   server.registerTool(
     "get_messages",
     {
       title: "Get messages",
-      description: "Fetch messages from a Room with seq greater than `since` (omit to get all).",
+      description:
+        "Fetch messages from a Room with seq greater than `since` (omit to get all). " +
+        "Set `mentions_me` to only fetch messages that mention you.",
       inputSchema: z.object({
         room_id: z.string().min(1),
         since: z.number().int().min(0).optional(),
+        mentions_me: z.boolean().optional(),
       }),
     },
     logged(
       "get_messages",
       member,
-      async ({ room_id, since }: { room_id: string; since?: number }) => {
-        const messages = await store.getMessages(room_id, since);
+      async ({
+        room_id,
+        since,
+        mentions_me,
+      }: {
+        room_id: string;
+        since?: number;
+        mentions_me?: boolean;
+      }) => {
+        await accessibleRoom(room_id);
+        const messages = await store.getMessages(room_id, since, mentions_me ? member : undefined);
         const text = messages.length
           ? messages.map((m) => `[${m.seq}] ${m.from}: ${m.text}`).join("\n")
           : "(no new messages)";
@@ -187,7 +305,7 @@ export function createMcpServer(
       inputSchema: z.object({}),
     },
     logged("list_rooms", member, async () => {
-      const records = await store.listRooms();
+      const records = (await store.listRooms()).filter((r) => canAccess(r, member));
       const rooms = await Promise.all(
         records.map(async (r) => {
           const last = await store.getMessagesBefore(r.roomId, undefined, 1);
@@ -211,8 +329,7 @@ export function createMcpServer(
       inputSchema: z.object({ room_id: z.string().min(1) }),
     },
     logged("get_room_state", member, async ({ room_id }: { room_id: string }) => {
-      const room = await store.getRoom(room_id);
-      if (!room) throw new RoomNotFoundError(room_id);
+      const room = await accessibleRoom(room_id);
       const messages = await store.getMessages(room_id, 0);
       const latestSeq = messages.reduce((max, m) => Math.max(max, m.seq), 0);
       return ok(
@@ -233,8 +350,7 @@ export function createMcpServer(
     },
     async (uri, { roomId }) => {
       const id = String(roomId);
-      const room = await store.getRoom(id);
-      if (!room) throw new RoomNotFoundError(id);
+      const room = await accessibleRoom(id);
       const messages = await store.getMessages(id, 0);
       return {
         contents: [

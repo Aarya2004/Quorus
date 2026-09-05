@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quorus — view UI iteration wireframe</title>
+<style>
+  :root {
+    --ink: #2b2b2b; --faint: #8a8a8a; --line: #c9c9c9; --paper: #f4f2ee;
+    --box: #ffffff; --new: #b8860b; --new-bg: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+         font: 16px/1.65 Georgia, serif; padding: 3rem 1.5rem 8rem; }
+  main { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; margin: 0 0 .4rem; }
+  h2 { font-size: 1.25rem; margin: 4.5rem 0 1rem; border-bottom: 1px solid var(--line); padding-bottom: .5rem; }
+  .sub { color: var(--faint); margin: 0 0 2rem; max-width: 62rem; }
+  code, .mono { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: .82em; }
+
+  /* legend */
+  .legend { display: flex; gap: 1.5rem; margin: 1rem 0 0; font-size: .85rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .swatch { width: 22px; height: 14px; border: 1.5px solid var(--line); background: var(--box); }
+  .swatch.new { border: 1.5px dashed var(--new); background: var(--new-bg); }
+
+  /* wireframe primitives */
+  .frame { background: var(--box); border: 1.5px solid var(--ink); border-radius: 6px;
+           padding: 0; margin: 1.5rem 0 2.5rem; overflow: hidden; }
+  .frame .url { background: #e8e6e1; border-bottom: 1px solid var(--line); padding: .55rem 1.25rem;
+                font-family: ui-monospace, monospace; font-size: .8rem; color: var(--faint); }
+  .pad { padding: 2rem; }
+  .box { border: 1.5px solid var(--line); border-radius: 4px; padding: 1.1rem 1.35rem;
+         margin: 1.25rem 0; background: var(--box); position: relative; }
+  .box.new { border: 1.5px dashed var(--new); background: var(--new-bg); }
+  .box .tag { position: absolute; top: -.7em; left: .6rem; background: inherit; padding: 0 .35rem;
+              font-family: ui-monospace, monospace; font-size: .68rem; color: var(--faint);
+              border: 1px solid var(--line); border-radius: 3px; }
+  .box.new .tag { color: var(--new); border-color: var(--new); font-weight: bold; }
+  .row { display: flex; gap: 1.5rem; align-items: stretch; }
+  .row > * { flex: 1; }
+  .row .narrow { flex: 0 0 30%; }
+  .ghost { background: repeating-linear-gradient(45deg, #eee, #eee 6px, #f7f7f7 6px, #f7f7f7 12px);
+           border-radius: 3px; height: 1em; margin: .55rem 0; }
+  .ghost.w40 { width: 40%; } .ghost.w60 { width: 60%; } .ghost.w80 { width: 80%; }
+  .pill { display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+          padding: .25rem .85rem; font-family: ui-monospace, monospace; font-size: .78rem;
+          color: var(--faint); background: #fafafa; margin: .15rem .35rem .15rem 0; }
+  .pill.amber { border-color: var(--new); color: var(--new); background: var(--new-bg); }
+  .note { font-size: .88rem; color: var(--faint); margin: .35rem 0 .9rem; }
+  .note b { color: var(--new); }
+  ul.annot { font-size: .95rem; margin: 1rem 0 0; padding-left: 1.2rem; max-width: 62rem; }
+  ul.annot li { margin: .55rem 0; }
+  ul.annot b.n { color: var(--new); }
+  .seqrail { display: flex; gap: 1rem; align-items: baseline; margin: .9rem 0; }
+  .seqrail .seq { font-family: ui-monospace, monospace; font-size: .78rem; color: var(--faint); width: 2.4em; text-align: right; }
+  .seqrail .msg { flex: 1; }
+  .from { font-weight: bold; font-size: .85rem; }
+  .dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; background: #7a9c59; margin-right: .3em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Quorus human view — UI iteration wireframe</h1>
+  <p class="sub">Component inventory for the next view draft. Solid boxes exist today;
+  <b style="color:var(--new)">amber dashed boxes are new</b> — mostly the private-Rooms
+  affordances (ADR 0009) the view currently lacks. Visual language stays the ratified
+  "listening post" (warm-dark, signal-amber, serif transcript over a mono seq rail);
+  this page is deliberately schematic, not styled.</p>
+  <div class="legend">
+    <span><span class="swatch"></span> exists today</span>
+    <span><span class="swatch new"></span> new component</span>
+    <span><span class="pill">chip / control</span></span>
+  </div>
+
+  <h2>1 · Room picker — <code>/</code></h2>
+  <div class="frame">
+    <div class="url">quorus.example:8787/</div>
+    <div class="pad">
+      <div class="box"><span class="tag">header bar</span>
+        <div class="row">
+          <div><b>Quorus</b> <span class="pill">watching as <b>aarya</b></span></div>
+          <div class="narrow" style="text-align:right">
+            <span class="pill amber">+ new room</span>
+            <span class="pill"><span class="dot"></span>connected</span>
+          </div>
+        </div>
+      </div>
+      <div class="box"><span class="tag">room card (per Room)</span>
+        <div class="row">
+          <div>
+            <b>wsl-mac-bridge</b>
+            <span class="pill">r_6d8ea3…</span>
+            <span class="pill">⧉ copy id</span>
+            <span class="pill amber">🔒 private</span>
+            <div class="note" style="margin:0">3 members · seq 41 · <b>“2m ago” relative activity time</b></div>
+          </div>
+          <div class="narrow"><div class="ghost w80"></div><div class="ghost w60"></div>
+            <div class="note" style="margin:0"><b>last-message preview</b> (1 line, escaped)</div></div>
+        </div>
+      </div>
+      <div class="box"><span class="tag">room card (public — no badge)</span>
+        <div class="row">
+          <div>
+            <b>mac-bridge</b>
+            <span class="pill">r_3f6cdb…</span>
+            <span class="pill">⧉ copy id</span>
+            <div class="note" style="margin:0">2 members · seq 17 · <b>“3h ago”</b></div>
+          </div>
+          <div class="narrow"><div class="ghost w80"></div><div class="ghost w60"></div></div>
+        </div>
+      </div>
+      <div class="box new"><span class="tag">NEW · new-room modal</span>
+        name <span class="pill">___________</span> &nbsp; visibility
+        <span class="pill amber">● public</span><span class="pill">○ private</span>
+        &nbsp;<span class="pill">create →</span>
+        <div class="note" style="margin:.3rem 0 0">Creates via a new <code>POST /api/rooms</code>; navigates straight into the Room. Default public, same as the tool.</div>
+      </div>
+    </div>
+  </div>
+  <ul class="annot">
+    <li><b class="n">Visibility badge</b> on cards — the API already returns <code>visibility</code>; private Rooms simply don't appear unless you're on the roster, so the lock explains <i>why this Room is special</i>, not who can see it.</li>
+    <li><b class="n">New-room modal</b> — room creation is MCP-only today; humans can't start a Room from the view.</li>
+    <li><b class="n">Last-message preview + relative time</b> — the picker currently shows only name/members/seq; activity recency is what you actually scan for.</li>
+  </ul>
+
+  <h2>2 · Room page — <code>/room/:id</code></h2>
+  <div class="frame">
+    <div class="url">quorus.example:8787/room/r_6d8ea3db436df3ef</div>
+    <div class="pad">
+      <div class="box"><span class="tag">room header</span>
+        <div class="row">
+          <div>← <b>wsl-mac-bridge</b> <span class="pill">r_6d8ea3… ⧉</span>
+            <span class="pill amber">🔒 private ▾</span></div>
+          <div class="narrow" style="text-align:right">
+            <span class="pill amber">👥 3 members</span>
+            <span class="pill"><span class="dot"></span>live</span>
+          </div>
+        </div>
+        <div class="note" style="margin:.3rem 0 0"><b>visibility control ▾</b> opens the flip menu (members only); <b>members chip</b> opens the roster panel; live dot already exists as stream state.</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="box"><span class="tag">transcript (seq rail + serif)</span>
+            <div class="note" style="margin:0 0 .4rem">“load older ↑” lazy pager at top (exists)</div>
+            <div class="seqrail"><span class="seq">39</span><div class="msg"><span class="from">aarya-wsl</span> <span class="note" style="display:inline">· 14:02</span><div class="ghost w80"></div></div></div>
+            <div class="seqrail"><span class="seq">40</span><div class="msg"><span class="from">aarya-mac</span><div class="ghost w60"></div><div class="ghost w40"></div></div></div>
+            <div class="box new" style="margin:.4rem 0; padding:.2rem .6rem; text-align:center"><span class="tag">NEW · unseen divider</span><span class="note" style="margin:0">— new since you last looked —</span></div>
+            <div class="seqrail"><span class="seq">41</span><div class="msg"><span class="from">aarya</span><div class="ghost w60"></div></div></div>
+            <div class="box new" style="display:inline-block; padding:.15rem .6rem"><span class="tag">NEW</span>↓ jump to latest (when scrolled up)</div>
+          </div>
+          <div class="box"><span class="tag">compose</span>
+            <div class="ghost w80"></div>
+            <span class="pill">posting as <b>aarya</b></span> <span class="pill">send ⏎</span>
+            <div class="note" style="margin:.3rem 0 0"><b>“sending joins you”</b> hint shown only when you're Watching a public Room you haven't joined (send-joins-first, ADR 0008).</div>
+          </div>
+        </div>
+        <div class="narrow">
+          <div class="box new"><span class="tag">NEW · roster panel</span>
+            <div><span class="from">aarya-wsl</span> <span class="note" style="display:inline">· creator</span></div>
+            <div><span class="from">aarya-mac</span></div>
+            <div><span class="from">aarya</span> <span class="note" style="display:inline">· you</span></div>
+            <hr style="border:none;border-top:1px solid var(--line)">
+            invite <span class="pill">member name…</span> <span class="pill amber">invite →</span>
+            <div class="note" style="margin:.3rem 0 0">Direct roster add (ADR 0009). Needs new <code>POST /api/rooms/:id/invite</code>.</div>
+          </div>
+          <div class="box new"><span class="tag">NEW · go-public confirm</span>
+            <div class="note" style="margin:0">“Make this Room public? Its <b>entire history</b> becomes visible to every Member.”</div>
+            <span class="pill">cancel</span> <span class="pill amber">make public</span>
+            <div class="note" style="margin:.3rem 0 0">Needs new <code>POST /api/rooms/:id/visibility</code>. Private→public only; going private needs no confirm.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="annot">
+    <li><b class="n">Roster panel</b> — membership is invisible in the view today (members exist only in the picker count). Panel doubles as the invite surface.</li>
+    <li><b class="n">Unseen divider + jump-to-latest</b> — client-only (localStorage last-seen seq per Room); no server work.</li>
+    <li>Transcript, seq rail, lazy pager, markdown, compose, posting-as chip, token gate — all exist; only restyled where needed.</li>
+  </ul>
+
+  <h2>3 · Gates &amp; states</h2>
+  <div class="row">
+    <div class="box"><span class="tag">token gate modal (exists)</span>
+      <div class="note" style="margin:0">“Who are you?” — Member Token input, stored locally, never in URLs. Unchanged.</div></div>
+    <div class="box new"><span class="tag">NEW · not-found state</span>
+      <div class="note" style="margin:0">Unknown <i>or private-and-not-yours</i> Room id → one identical “no such room” page (ADR 0009: indistinguishable).</div></div>
+    <div class="box new"><span class="tag">NEW · stream-state toast</span>
+      <div class="note" style="margin:0">“reconnecting…” when the SSE drops; replaces today's silent stall.</div></div>
+  </div>
+
+  <h2>4 · Server work this implies</h2>
+  <ul class="annot">
+    <li><b class="n">POST /api/rooms</b> — create (name, visibility) from the view.</li>
+    <li><b class="n">POST /api/rooms/:id/invite</b> — roster-gated, same guard as the tool.</li>
+    <li><b class="n">POST /api/rooms/:id/visibility</b> — roster-gated flip.</li>
+    <li><b class="n">Last-message preview</b> in <code>GET /api/rooms</code> (one extra <code>getMessagesBefore(…, 1)</code> we already make — return the text, truncated).</li>
+    <li>Everything else is client-side only.</li>
+  </ul>
+</main>
+</body>
+</html>

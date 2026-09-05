@@ -27,16 +27,18 @@ describe("MCP tools", () => {
     store = new JsonlStore(dir);
   });
 
-  it("exposes exactly the six tools", async () => {
+  it("exposes exactly the eight tools", async () => {
     const alice = await connect(store, "alice");
     const { tools } = await alice.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "create_room",
       "get_messages",
       "get_room_state",
+      "invite_member",
       "join_room",
       "list_rooms",
       "send_message",
+      "set_visibility",
     ]);
   });
 
@@ -106,6 +108,214 @@ describe("MCP tools", () => {
       arguments: { room_id: "r_nope", text: "x" },
     });
     expect(send.isError).toBe(true);
+  });
+
+  it("makes a private Room indistinguishable from a nonexistent one to non-members", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({
+      name: "create_room",
+      arguments: { name: "secret", visibility: "private" },
+    });
+    expect((created.structuredContent as Any).visibility).toBe("private");
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    const listed = await bob.callTool({ name: "list_rooms", arguments: {} });
+    expect((listed.structuredContent as Any).rooms).toEqual([]);
+
+    for (const probe of [
+      { name: "join_room", arguments: { room_id: roomId } },
+      { name: "get_messages", arguments: { room_id: roomId } },
+      { name: "get_room_state", arguments: { room_id: roomId } },
+      { name: "send_message", arguments: { room_id: roomId, text: "let me in" } },
+    ]) {
+      const res = await bob.callTool(probe);
+      expect(res.isError).toBe(true);
+      expect((res.content as Any)[0].text).toBe(`Room not found: ${roomId}`);
+    }
+    await expect(bob.readResource({ uri: `quorus://room/${roomId}` })).rejects.toBeDefined();
+
+    // The creator still has full access.
+    const mine = await alice.callTool({ name: "get_room_state", arguments: { room_id: roomId } });
+    expect(mine.isError).toBeFalsy();
+  });
+
+  it("invite_member adds the invitee directly to the roster with full access", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({
+      name: "create_room",
+      arguments: { name: "secret", visibility: "private" },
+    });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    await alice.callTool({ name: "send_message", arguments: { room_id: roomId, text: "hi bob" } });
+
+    const invited = await alice.callTool({
+      name: "invite_member",
+      arguments: { room_id: roomId, member: "bob" },
+    });
+    expect((invited.structuredContent as Any).members).toEqual(["alice", "bob"]);
+
+    const got = await bob.callTool({ name: "get_messages", arguments: { room_id: roomId } });
+    expect((got.structuredContent as Any).messages).toMatchObject([
+      { from: "alice", text: "hi bob" },
+    ]);
+    const sent = await bob.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "thanks" },
+    });
+    expect((sent.structuredContent as Any).seq).toBe(2);
+  });
+
+  it("only a Member of the Room can invite or flip visibility", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "open" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    // Public Room, but bob is not on the roster — no invite/flip authority.
+    const invite = await bob.callTool({
+      name: "invite_member",
+      arguments: { room_id: roomId, member: "mallory" },
+    });
+    expect(invite.isError).toBe(true);
+    const flip = await bob.callTool({
+      name: "set_visibility",
+      arguments: { room_id: roomId, visibility: "private" },
+    });
+    expect(flip.isError).toBe(true);
+  });
+
+  it("set_visibility gates and un-gates an existing Room", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "plan" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    const gated = await alice.callTool({
+      name: "set_visibility",
+      arguments: { room_id: roomId, visibility: "private" },
+    });
+    expect((gated.structuredContent as Any).visibility).toBe("private");
+    const denied = await bob.callTool({ name: "join_room", arguments: { room_id: roomId } });
+    expect(denied.isError).toBe(true);
+
+    await alice.callTool({
+      name: "set_visibility",
+      arguments: { room_id: roomId, visibility: "public" },
+    });
+    const joined = await bob.callTool({ name: "join_room", arguments: { room_id: roomId } });
+    expect(joined.isError).toBeFalsy();
+  });
+
+  it("stores roster-validated mentions and returns them in payloads", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "plan" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    await bob.callTool({ name: "join_room", arguments: { room_id: roomId } });
+
+    await alice.callTool({ name: "send_message", arguments: { room_id: roomId, text: "plain" } });
+    const sent = await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "hey @bob", mentions: ["bob"] },
+    });
+    expect(sent.isError).toBeFalsy();
+
+    const got = await bob.callTool({ name: "get_messages", arguments: { room_id: roomId } });
+    const messages = (got.structuredContent as Any).messages;
+    expect(messages.map((m: Any) => m.mentions)).toEqual([undefined, ["bob"]]);
+
+    // The Room resource JSON carries mentions too.
+    const resource = await bob.readResource({ uri: `quorus://room/${roomId}` });
+    const body = JSON.parse((resource.contents as Any)[0].text);
+    expect(body.messages.map((m: Any) => m.mentions)).toEqual([undefined, ["bob"]]);
+  });
+
+  it("fails a send loudly when any mention is not on the roster, storing nothing", async () => {
+    const alice = await connect(store, "alice");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "plan" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    const res = await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "hi", mentions: ["alice", "mallory"] },
+    });
+    expect(res.isError).toBe(true);
+    expect((res.content as Any)[0].text).toBe("mallory is not a member of this room");
+
+    const got = await alice.callTool({ name: "get_messages", arguments: { room_id: roomId } });
+    expect((got.structuredContent as Any).messages).toEqual([]);
+  });
+
+  it("watchers are unmentionable until they join the roster", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "open" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    // bob can watch the public Room but is not a Member — a mention must fail.
+    const watching = await bob.callTool({ name: "get_messages", arguments: { room_id: roomId } });
+    expect(watching.isError).toBeFalsy();
+    const denied = await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "hi bob", mentions: ["bob"] },
+    });
+    expect(denied.isError).toBe(true);
+
+    await bob.callTool({ name: "join_room", arguments: { room_id: roomId } });
+    const allowed = await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "hi bob", mentions: ["bob"] },
+    });
+    expect(allowed.isError).toBeFalsy();
+  });
+
+  it("mentions_me returns only my mentions after the cursor", async () => {
+    const alice = await connect(store, "alice");
+    const bob = await connect(store, "bob");
+    const created = await alice.callTool({ name: "create_room", arguments: { name: "plan" } });
+    const roomId = (created.structuredContent as Any).roomId as string;
+    await bob.callTool({ name: "join_room", arguments: { room_id: roomId } });
+
+    await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "early ping", mentions: ["bob"] },
+    });
+    await alice.callTool({ name: "send_message", arguments: { room_id: roomId, text: "noise" } });
+    await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "self note", mentions: ["alice"] },
+    });
+    await alice.callTool({
+      name: "send_message",
+      arguments: { room_id: roomId, text: "late ping", mentions: ["bob"] },
+    });
+
+    const all = await bob.callTool({
+      name: "get_messages",
+      arguments: { room_id: roomId, mentions_me: true },
+    });
+    expect(((all.structuredContent as Any).messages as Any[]).map((m) => m.text)).toEqual([
+      "early ping",
+      "late ping",
+    ]);
+
+    const afterCursor = await bob.callTool({
+      name: "get_messages",
+      arguments: { room_id: roomId, since: 1, mentions_me: true },
+    });
+    expect(((afterCursor.structuredContent as Any).messages as Any[]).map((m) => m.text)).toEqual([
+      "late ping",
+    ]);
+  });
+
+  it("describes the attention contract in the server instructions", async () => {
+    const alice = await connect(store, "alice");
+    const instructions = alice.getInstructions() ?? "";
+    expect(instructions).toContain("mentions_me");
+    expect(instructions).toMatch(/attention/i);
+    expect(instructions).toMatch(/no obligation to (respond|reply)/i);
   });
 
   it("rejects empty message text", async () => {
