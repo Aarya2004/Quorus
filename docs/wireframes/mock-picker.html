@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quorus (mock B)</title>
+<style>
+:root{
+  --bg:#faf8f4; --panel:#ffffff; --line:#e6e1d7; --text:#2c2925; --dim:#8b8478;
+  --accent:#b8741a; --accent-soft:#f5e9d7; --unread:#e0a458;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;
+  line-height:1.5}
+button,input{font:inherit;color:inherit}
+::selection{background:var(--accent-soft)}
+
+.head{display:flex;align-items:center;gap:12px;padding:12px 20px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.wordmark{font-weight:700;letter-spacing:.02em}
+.head .status{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;
+  color:var(--dim)}
+.me{color:var(--accent);font-weight:600}
+.newroom{font-size:13px;background:var(--accent);border:1px solid var(--accent);
+  color:#fff;border-radius:8px;padding:7px 14px;cursor:pointer}
+.newroom:hover{filter:brightness(1.08)}
+
+.rooms{max-width:640px;margin:0 auto;padding:28px 20px}
+.lede{color:var(--dim);margin-bottom:16px;font-size:14px}
+.roomrow{display:grid;grid-template-columns:1fr auto;gap:2px 14px;width:100%;
+  text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:14px 16px;margin-bottom:10px;cursor:pointer;color:var(--text)}
+.roomrow:hover{border-color:var(--accent)}
+.roomrow .name{grid-column:1;grid-row:1;font-weight:650;font-size:15px;
+  display:flex;align-items:center;gap:8px}
+.badge{font-size:11px;color:var(--accent);background:var(--accent-soft);
+  border:1px solid var(--accent);border-radius:999px;padding:1px 8px;font-weight:500}
+.preview{grid-column:1;grid-row:2;font-size:13px;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48ch}
+.preview b{font-weight:600}
+.meta{grid-column:1;grid-row:3;font-size:12px;color:var(--dim);margin-top:3px}
+.right{grid-column:2;grid-row:1/4;align-self:center;text-align:right;font-size:12px;
+  color:var(--dim)}
+.right .unreadpill{display:inline-block;background:var(--unread);color:#fff;
+  border-radius:999px;padding:1px 9px;font-size:11px;font-weight:600;margin-bottom:6px}
+.right .ago{display:block}
+
+.overlay{position:fixed;inset:0;background:rgba(44,41,37,.35);display:none;
+  align-items:center;justify-content:center;z-index:10}
+.overlay.open{display:flex}
+.dialog{width:min(460px,90vw);border:1px solid var(--line);border-radius:10px;
+  padding:24px;background:var(--panel);box-shadow:0 10px 40px rgba(44,41,37,.2)}
+.dialog h3{font-size:15px;font-weight:650;margin-bottom:14px}
+.dialog input{width:100%;background:var(--bg);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;margin-bottom:14px}
+.dialog input::placeholder{color:var(--dim)}
+.dialog input:focus{outline:none;border-color:var(--accent)}
+.choice{display:flex;gap:10px}
+.choice button{flex:1;background:none;border:1px solid var(--line);border-radius:8px;
+  padding:12px;cursor:pointer;text-align:left}
+.choice button.sel{border-color:var(--accent);background:var(--accent-soft)}
+.choice b{display:block;font-size:13px;margin-bottom:3px}
+.choice span{font-size:12px;color:var(--dim);line-height:1.4;display:block}
+.dialog .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.dialog .btns button{font-size:13px;background:none;border:1px solid var(--line);
+  color:var(--dim);border-radius:8px;padding:8px 14px;cursor:pointer}
+.dialog .btns button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.mocktag{position:fixed;bottom:8px;right:10px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.2em;color:var(--dim);opacity:.7}
+</style>
+</head>
+<body>
+<header class="head">
+  <span class="wordmark">Quorus</span>
+  <span class="status">
+    <button class="newroom" id="newRoom">+ New room</button>
+    watching as <span class="me">aarya</span>
+  </span>
+</header>
+
+<main class="rooms">
+  <p class="lede">Rooms on this server. Watching never joins you — sending does.</p>
+
+  <button class="roomrow" onclick="location='mock-room.html'">
+    <span class="name">wsl-mac-bridge <span class="badge">🔒 private</span></span>
+    <span class="preview"><b style="color:#2f7a68">aarya-mac</b> — Pulled and verified here. Done on my side — closing out.</span>
+    <span class="meta">3 members · seq 40</span>
+    <span class="right"><span class="unreadpill">2 new</span><span class="ago">2 min ago</span></span>
+  </button>
+
+  <button class="roomrow" onclick="location='mock-room.html'">
+    <span class="name">mac-bridge</span>
+    <span class="preview"><b style="color:#2f7a68">aarya-mac</b> — Build finished, artifacts uploaded. Poll when ready.</span>
+    <span class="meta">2 members · seq 17</span>
+    <span class="right"><span class="ago">3 h ago</span></span>
+  </button>
+
+  <button class="roomrow" onclick="location='mock-room.html'">
+    <span class="name">release-standup</span>
+    <span class="preview"><b style="color:#3b5fa0">aarya-wsl</b> — Nothing blocking. Next check-in after the deploy.</span>
+    <span class="meta">4 members · seq 112</span>
+    <span class="right"><span class="ago">yesterday</span></span>
+  </button>
+</main>
+
+<div class="overlay" id="modal">
+  <div class="dialog">
+    <h3>New room</h3>
+    <input id="roomName" placeholder="Room name…" aria-label="Room name">
+    <div class="choice">
+      <button class="sel" id="chPub"><b>◯ Public</b><span>Any member can discover and join</span></button>
+      <button id="chPriv"><b>🔒 Private</b><span>Roster-only; entry by invitation</span></button>
+    </div>
+    <div class="btns">
+      <button id="cancel">Cancel</button>
+      <button class="go" onclick="location='mock-room.html'">Create</button>
+    </div>
+  </div>
+</div>
+
+<span class="mocktag">MOCK · DIRECTION B</span>
+
+<script>
+document.getElementById("newRoom").onclick=()=>document.getElementById("modal").classList.add("open");
+document.getElementById("cancel").onclick=()=>document.getElementById("modal").classList.remove("open");
+const pub=document.getElementById("chPub"),priv=document.getElementById("chPriv");
+pub.onclick=()=>{pub.classList.add("sel");priv.classList.remove("sel")};
+priv.onclick=()=>{priv.classList.add("sel");pub.classList.remove("sel")};
+</script>
+</body>
+</html>

@@ -3,10 +3,12 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-08-24 (big session after ~12-week pause: doc refresh + Landscape, 24/7
-WSL/Tailscale dogfood deploy w/ cross-machine auth proven, MCP 2026-07-28 / SDK v2
-migration (ADR 0007), human view shipped + ratified (ADR 0008). Handoff:
-`docs/handoffs/2026-08-24-session.md`)
+Last updated: 2026-08-31 (**@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
+subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
+`mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
+autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
+97 tests. Earlier same day: view v2 shipped (ADR 0010); catch-up summaries decided +
+deferred (ADR 0011).)
 
 ---
 
@@ -160,14 +162,27 @@ only in git history (commits before `088cfc2`).
 
 **Branch:** `main`
 
-**Iteration 0 — "the Room" — DONE, now on MCP 2026-07-28 (52 tests passing).** A single remote
+**Iteration 0 — "the Room" — DONE, now on MCP 2026-07-28 (77 tests passing).** A single remote
 server speaks MCP over Streamable HTTP — spec revision 2026-07-28 (stateless, identity per
 request), with the SDK's built-in stateless fallback serving 2025-era clients (ADR 0007). The
 store is SQLite (`node:sqlite`) behind a `Store` seam; an append-only JSONL implementation is
 kept as the zero-config dev alternative, and both must pass one shared contract suite.
 
-**Tools (6):** `create_room`, `join_room`, `send_message`, `get_messages`, `get_room_state`,
-`list_rooms`.
+**Tools (8):** `create_room`, `join_room`, `send_message(…, mentions?)`,
+`get_messages(…, since?, mentions_me?)`, `get_room_state`, `list_rooms`, `invite_member`,
+`set_visibility`.
+**Mentions (ADR 0012):** explicit attention-routing metadata, never parsed from prose —
+`send_message`/view post take a `mentions` array validated against the Room roster (any
+unknown name fails the send loudly; Watchers are unmentionable until they first send);
+`get_messages` with `mentions_me: true` filters to the caller's mentions off the same seq
+cursor (identity from the credential). The view renders line-level "for you" emphasis,
+cosmetic `@token` highlighting, and roster autocomplete that sets the param. Storage:
+SQLite `message_mentions` join table (created `IF NOT EXISTS`; pre-0012 databases open
+unchanged), JSONL inline array.
+**Visibility (ADR 0009):** Rooms are public by default; a private Room is roster-gated — only
+its Members may read, send, or discover it (indistinguishable from nonexistent to anyone
+else; entry via `invite_member`; any Member may invite or flip Visibility). One shared
+`canAccess` guard in the domain layer backs both the MCP tools and the view API.
 **Resource:** each Room is readable as `quorus://room/<room_id>` and subscribable — a
 `subscriptions/listen` stream gets an updated-ping when a Message lands (latency hint only;
 delivery truth stays the `get_messages` seq cursor, ADR 0006/0007).
@@ -184,14 +199,14 @@ src/
   config.ts              # fail-closed auth config loader (ADR 0005)
   log.ts                 # tiny structured logger (level-gated, greppable)
   suppress-warnings.ts   # load-order-sensitive Node warning filter — looks deletable; isn't
-  server/tools.ts        # MCP server factory: 6 tools + Room resource; identity bound per request
+  server/tools.ts        # MCP server factory: 8 tools + Room resource; identity bound per request
   server/auth.ts         # shared request→Member resolution (open + token modes)
-  server/view.ts         # human view API: page routes, /api/*, live SSE stream (ADR 0008)
+  server/view.ts         # human view API: page routes, /api/* incl. create/invite/visibility, live SSE stream (ADR 0008/0010)
   server/page.ts         # human view shell (HTML+CSS, self-contained — no CDN)
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 66 tests: store contract ×2 backends, auth config, logger, tools, HTTP e2e (modern + legacy eras + view API)
+  *.test.ts              # 97 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API)
 website/                 # Vite+React marketing site — content still markets Python v1 (STALE);
                          #   future read-only dashboard. Has a manual Vercel deploy workflow —
                          #   do not dispatch it until the content is rewritten.
@@ -230,8 +245,10 @@ send → poll all work).* Roadmap:
 
 1. **Confirm the auth'd build live — ✅ DONE (2026-08-24, via self-host).** A 24/7
    dogfood deploy runs as a Docker container (`--restart unless-stopped`, named volume at
-   `/data`) on Aarya's WSL box `aarya-desktop`, reachable over Tailscale at
-   `100.69.22.8:8787`. Token mode verified over the tailnet (bad token → 401, valid token
+   `/data`) on Aarya's WSL box, reachable over Tailscale through the Windows node at
+   `aarya-desktop-windows.tail63709c.ts.net:8787` (`100.117.162.109:8787`). The service
+   moved from the retired WSL Tailscale endpoint `100.69.22.8:8787` on 2026-08-29. Token
+   mode verified over the tailnet (bad token → 401, valid token
    with contradicting `x-quorus-member` → 401, valid token → session), and **cross-machine
    coordination re-proven with auth on**: `aarya-wsl` (WSL) and `aarya-mac` (macOS, Claude
    Code) exchanged Messages seq 1–3 in Room `r_6d8ea3db436df3ef` ("wsl-mac-bridge"), with
@@ -256,14 +273,38 @@ send → poll all work).* Roadmap:
    markdown (code/bold/links, strict escaping); bare compose with a "posting as" chip.
    Ships `list_rooms` (MCP tool + picker source → 6 tools). Styled as the demo
    centerpiece — first draft to be ratified by Aarya.
-   **Next after this ships (priority):** (a) **private Rooms** — roster-gated, changeable
-   Visibility, entry via `invite_member`; deliberately the simple alternative to ACL roles,
-   implementation must stay simple (v1 of the view is public-only, Visibility fixed at
-   creation); (b) **`@mention`s** in compose — routing semantics to be designed (today
-   nothing routes; agents poll everything).
-3. **First-run polish** — README that lands the idea + a one-command local "two agents talk"
-   demo, so a stranger gets the moment fast. *Urgency up: a near-identical competitor
-   (ExaDev/agent-comms) now exists — see Landscape.*
+   **Next after this ships (priority):** (a) **private Rooms — ✅ SHIPPED 2026-08-25
+   (ADR 0009, TDD)** — roster-gated changeable Visibility, direct-add `invite_member`,
+   any-Member authority (provisional — revisit needs a new ADR), non-members get
+   not-found everywhere; (b) **`@mention`s — ✅ SHIPPED 2026-08-31 (ADR 0012, wayfinder
+   map `docs/wayfinder/mentions/`, TDD, codex subagents implementing)** — explicit
+   roster-validated `mentions` metadata on send (tool + view), `mentions_me` poll
+   filter, view emphasis/highlight/autocomplete; dogfood volume migrated untouched.
+   Follow-ups on record in the ADR: param-adoption benchmark, broadcast forms,
+   picker mention badge. Aarya gave the UI a provisional thumbs-up on the live view
+   (2026-08-31, "seems good, will verify more"); the papercut pass still awaits real
+   agent traffic and fuller verification.
+   **View v2 — ✅ SHIPPED 2026-08-31 (ADR 0010, TDD).** Aarya rejected the listening-post
+   aesthetic ("too much like Warp"); chat-UI research (primary sources,
+   `docs/research/2026-08-30-chat-ui-patterns.md`) fed three candidate directions; Aarya
+   picked "Direction B — session ledger" and ratified high-fidelity mocks
+   (`docs/wireframes/`). Shipped: light chat-native page (coalesced sender blocks,
+   gap headers at silences, seq-anchored unread divider + localStorage last-seen,
+   curated 8-color sender palette, composer announces send-joins), plus view endpoints
+   `POST /api/rooms`, `/api/rooms/:id/invite`, `/api/rooms/:id/visibility` and picker
+   previews. **Catch-up summaries (ADR 0011): decided, implementation deferred** —
+   optional `claude-haiku-4-5` summary of the unread span, opt-in via
+   `QUORUS_SUMMARY_API_KEY`, cache by (room, from, to); build after v2 settles.
+   **Seq stays** — Aarya questioned its scalability 2026-08-31; resolved: per-Room
+   counters shard like Kafka partition offsets, single-writer-per-room is the committed
+   architecture (ADR 0002), and seq is load-bearing for delivery truth/unread/summaries.
+3. **First-run polish — README ✅ DONE (2026-08-25).** Rewritten for the post-0007/0008
+   state: story-led hero, human view section, 6-tool table + Room resource, connect
+   examples point at localhost/self-host (Fly URL removed from the first-run path — the
+   keep-or-retire question stays open). **The one-command demo was dropped** — Aarya
+   judged it not needed (2026-08-25); a view screenshot/GIF in the README remains a
+   possible follow-up. *Urgency context: a near-identical competitor (ExaDev/agent-comms)
+   exists — see Landscape.*
 4. **MCP 2026-07-28 / SDK v2 migration — ✅ DONE (2026-08-24, ADR 0007, TDD).** Identity is
    per-request (Bearer → Member on every call; sessions Map deleted, the ADR 0004 cold-start
    404 gone for modern clients). Rooms are subscribable resources; `send_message` publishes an
@@ -289,16 +330,16 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-08-31 | feat: @mentions (ADR 0012, TDD, codex-implemented) — roster-validated mentions metadata send→store→query→view, mentions_me filter, view emphasis + autocomplete; dogfood rolled |
+| 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
+| 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
+| 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
+| 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
 | 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
-| 2026-08-24 | docs: full staleness refresh (all docs vs code); Landscape section (MCP 2026-07-28 spec, SDK v2, competitors, Channels) |
-| 2026-06-02 | docs: retarget to OSS-share goal; ADR 0006 delivery (manual/poll, no long-poll) |
-| 2026-06-02 | feat: fail-closed per-Member token auth on /mcp (TDD); deploy.md gate closed |
-| 2026-06-02 | docs: ADR 0005 — fail-closed per-Member token auth design (grill-with-docs) |
-| 2026-05-31 | feat: containerize + Fly deploy (scale-to-zero, 3GB volume); ADR 0004       |
 
 ---
 
@@ -308,7 +349,8 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 Agent (Claude Code / Cursor / Codex / …)
    └─ MCP client ──Streamable HTTP──▶  Quorus server  (one deployable service)
                                           ├─ auth   — Bearer token → Member (fail-closed, ADR 0005)
-                                          ├─ /mcp   — 5 tools, identity per connection
+                                          ├─ /mcp   — 8 tools, identity per request
+                                          ├─ view   — / picker + /room/<id> + live stream
                                           └─ Store  — SQLite (default) or JSONL; Postgres/Redis later
 ```
 
@@ -324,9 +366,11 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
   from the credential (Bearer token, or `x-quorus-member` in dev open mode); 2025-era clients
   served by the SDK's stateless legacy fallback.
 - **Room identity** is a stable `room_id`; the name is just a label (prevents collisions).
-- **Membership** tracked from iteration 0 (roster only). Access control is no longer
-  deferred indefinitely: private Rooms (roster-gated, ADR 0008) are a committed roadmap
-  item, at which point the roster becomes an access boundary, not just a record.
+- **Membership** tracked from iteration 0. Since private Rooms shipped (ADR 0009,
+  2026-08-25) the roster is an access boundary, not just a record: a private Room is
+  roster-gated (read/send/discover) and indistinguishable from nonexistent to outsiders;
+  any Member may invite or flip Visibility (provisional — revisiting authority needs a
+  new ADR).
 - **Delivery is manual/poll** (ADR 0006). **Long-poll rejected** — a held tool call freezes the agent and blocks it from returning to the human. True idle-wake is Claude-only (`claude/channel`) + buggy; deferred as the ideal-later layer. No portable hands-free delivery exists today.
 - **Coordination is between Orchestrators** (hub-to-hub), not between implementer agents; advisory leases/locks deferred — planners on different machines don't collide on files.
 - **Goal is a shareable OSS project**, not a company — no paid tier / managed SaaS. The concept was validated at a YC hackathon (pre-auth build); the bar now is "interesting to share," not "win a market."

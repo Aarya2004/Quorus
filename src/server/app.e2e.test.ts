@@ -154,7 +154,13 @@ describe("modern era (2026-07-28)", () => {
 describe("human view API", () => {
   let url: URL;
   let close: () => void;
-  const auth: AuthConfig = { mode: "token", tokens: new Map([["tk_alice", "alice"]]) };
+  const auth: AuthConfig = {
+    mode: "token",
+    tokens: new Map([
+      ["tk_alice", "alice"],
+      ["tk_bob", "bob"],
+    ]),
+  };
   beforeAll(async () => ({ url, close } = await startApp(auth)));
   afterAll(() => close());
 
@@ -194,6 +200,7 @@ describe("human view API", () => {
 
     const { rooms } = (await (await api("/api/rooms")).json()) as Any;
     expect(rooms[0]).toMatchObject({ roomId, name: "view", latestSeq: 5 });
+    expect(rooms[0].preview).toMatchObject({ from: "alice", text: "m5" });
 
     const page = (await (await api(`/api/rooms/${roomId}?limit=2`)).json()) as Any;
     expect(page).toMatchObject({ roomId, name: "view", members: ["alice"] });
@@ -248,6 +255,146 @@ describe("human view API", () => {
     // Posting joined alice (she was already a member as creator) — assert roster honest.
     const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
     expect(page.members).toContain("alice");
+  });
+
+  it("posts mentions from the view, streams them live, and 400s unknown names", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "mentions" }),
+    });
+    const roomId = ((await created.json()) as Any).roomId as string;
+    await api(`/api/rooms/${roomId}/invite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member: "bob" }),
+    });
+
+    // Watcher: hold the stream open, collect the first data frame.
+    const ctrl = new AbortController();
+    const streamRes = await api(`/api/rooms/${roomId}/stream`, { signal: ctrl.signal });
+    const reader = streamRes.body?.getReader();
+    const firstFrame = (async () => {
+      const dec = new TextDecoder();
+      let buf = "";
+      while (reader) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const m = buf.match(/data: (.+)\n/);
+        if (m?.[1]) return JSON.parse(m[1]);
+      }
+      throw new Error("stream ended without data");
+    })();
+
+    const post = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hey @bob", mentions: ["bob"] }),
+    });
+    expect(post.status).toBe(200);
+
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("no stream frame in 2s")), 2000),
+    );
+    const frame = (await Promise.race([firstFrame, timeout])) as Any;
+    expect(frame).toMatchObject({ from: "alice", text: "hey @bob", mentions: ["bob"] });
+    ctrl.abort();
+
+    // The page payload carries mentions end to end as well.
+    const page = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(page.messages.map((m: Any) => m.mentions)).toEqual([["bob"]]);
+
+    // Unknown name: loud 400, nothing stored.
+    const bad = await api(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hi", mentions: ["mallory"] }),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as Any).error).toBe("mallory is not a member of this room");
+    const after = (await (await api(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(after.messages).toHaveLength(1);
+  });
+
+  it("creates a Room from the view, respecting visibility", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "view-born", visibility: "private" }),
+    });
+    expect(created.status).toBe(200);
+    const room = (await created.json()) as Any;
+    expect(room).toMatchObject({ name: "view-born", visibility: "private", members: ["alice"] });
+
+    const bobList = (await (
+      await fetch(new URL("/api/rooms", url), { headers: { authorization: "Bearer tk_bob" } })
+    ).json()) as Any;
+    expect(bobList.rooms.map((r: Any) => r.roomId)).not.toContain(room.roomId);
+  });
+
+  it("invites and flips visibility from the view; non-members get 403", async () => {
+    const created = await api("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "steering" }),
+    });
+    const { roomId } = (await created.json()) as Any;
+
+    // bob is not a member — no invite/flip authority even on a public Room.
+    const bobFlip = await fetch(new URL(`/api/rooms/${roomId}/visibility`, url), {
+      method: "POST",
+      headers: { authorization: "Bearer tk_bob", "content-type": "application/json" },
+      body: JSON.stringify({ visibility: "private" }),
+    });
+    expect(bobFlip.status).toBe(403);
+
+    const invited = await api(`/api/rooms/${roomId}/invite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member: "bob" }),
+    });
+    expect(((await invited.json()) as Any).members).toEqual(["alice", "bob"]);
+
+    const flipped = await api(`/api/rooms/${roomId}/visibility`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ visibility: "private" }),
+    });
+    expect(((await flipped.json()) as Any).visibility).toBe("private");
+  });
+
+  it("hides a private Room from a non-member's view until they are invited", async () => {
+    const bobApi = (path: string, init?: RequestInit) =>
+      fetch(new URL(path, url), {
+        ...init,
+        headers: { authorization: "Bearer tk_bob", ...(init?.headers ?? {}) },
+      });
+
+    const alice = await connectV2(url, { authorization: "Bearer tk_alice" });
+    const created = await alice.callTool({
+      name: "create_room",
+      arguments: { name: "war-room", visibility: "private" },
+    });
+    const roomId = (created.structuredContent as Any).roomId as string;
+
+    // To bob the Room does not exist: absent from the picker, 404 everywhere.
+    const { rooms } = (await (await bobApi("/api/rooms")).json()) as Any;
+    expect(rooms.map((r: Any) => r.roomId)).not.toContain(roomId);
+    expect((await bobApi(`/api/rooms/${roomId}`)).status).toBe(404);
+    expect((await bobApi(`/api/rooms/${roomId}/stream`)).status).toBe(404);
+    const post = await bobApi(`/api/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "knock knock" }),
+    });
+    expect(post.status).toBe(404);
+
+    await alice.callTool({ name: "invite_member", arguments: { room_id: roomId, member: "bob" } });
+    await alice.close();
+
+    const page = (await (await bobApi(`/api/rooms/${roomId}`)).json()) as Any;
+    expect(page).toMatchObject({ roomId, name: "war-room", visibility: "private" });
   });
 
   it("rejects an empty or oversize view post", async () => {
