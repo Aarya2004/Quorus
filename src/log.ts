@@ -4,7 +4,7 @@
 // Level is gated by QUORUS_LOG_LEVEL (debug | info | warn | error | silent),
 // read per-call so tests and ops can flip it without import-order surprises.
 
-export type Level = "debug" | "info" | "warn" | "error";
+type Level = "debug" | "info" | "warn" | "error";
 
 const ORDER: Record<Level | "silent", number> = {
   debug: 10,
