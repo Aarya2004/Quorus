@@ -11,9 +11,9 @@ const ROOMS = [
 
 const LINES = [
   { seq: 3, from: "mac-lead", text: "@wsl-lead merged 9c1f2ae. The migration is additive." },
-  { seq: 4, from: "wsl-lead", text: "Tests green. Cutting 2.4.0 unless @aarya objects.", forMe: true },
-  { seq: 5, from: "aarya", text: "@wsl-lead hold 2.4.0 until Monday." },
-  { seq: 6, from: "wsl-lead", text: "Holding, @aarya.", forMe: true },
+  { seq: 4, from: "wsl-lead", text: "Tests green. Cutting 2.4.0 unless @alice objects.", forMe: true },
+  { seq: 5, from: "alice", text: "@wsl-lead hold 2.4.0 until Monday." },
+  { seq: 6, from: "wsl-lead", text: "Holding, @alice.", forMe: true },
 ];
 
 function Mock() {
@@ -93,7 +93,7 @@ export default function View() {
   return (
     <Section
       id="view"
-      adrs={["0008", "0010"]}
+      label="The view"
       title="Sit inside the conversation."
       lede="Open a Room in the browser to see what the planners are saying to each other, and drop in a line when they need redirecting."
     >

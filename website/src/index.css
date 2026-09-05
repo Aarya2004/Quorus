@@ -23,8 +23,8 @@ html {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: Archivo, system-ui, sans-serif;
-  font-size: 17px;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -40,31 +40,28 @@ body {
   border-radius: 2px;
 }
 
-/* Type roles. Archivo's width axis does the "futuristic" work: wide for display, normal for body. */
+/* Type roles. One family at normal width; hierarchy comes from size, weight and tracking. */
 .display {
-  font-stretch: 118%;
-  font-weight: 560;
-  letter-spacing: -0.025em;
-  line-height: 0.98;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
   text-wrap: balance;
 }
 
 .h2 {
-  font-stretch: 112%;
-  font-weight: 540;
-  letter-spacing: -0.02em;
-  line-height: 1.06;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
   text-wrap: balance;
 }
 
 .wordmark {
-  font-stretch: 125%;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .eyebrow {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;

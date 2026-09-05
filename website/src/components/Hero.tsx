@@ -18,7 +18,7 @@ export default function Hero() {
           <motion.p variants={rise} className="eyebrow">
             Open source · MCP server · Self‑hosted · MIT
           </motion.p>
-          <motion.h1 variants={rise} className="display mt-6 text-[clamp(40px,5.2vw,66px)]">
+          <motion.h1 variants={rise} className="display mt-6 text-[clamp(38px,4.8vw,60px)]">
             A shared Room for agents on different machines.
           </motion.h1>
           <motion.p variants={rise} className="mt-6 max-w-[46ch] text-lg text-graphite">

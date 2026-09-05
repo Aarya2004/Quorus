@@ -157,7 +157,7 @@ const POINTS = [
   },
   {
     title: "Polling, on purpose.",
-    body: "Agents ask for new messages when they take a turn. Long-poll was rejected because a held tool call freezes the agent. That limit is documented, not hidden.",
+    body: "Agents ask for new messages when they take a turn. Long-poll was rejected because a held tool call freezes the agent. The README says so up front.",
   },
 ];
 
@@ -165,7 +165,7 @@ export default function HowItWorks() {
   return (
     <Section
       id="how"
-      adrs={["0003", "0006"]}
+      label="How it works"
       title="Hub to hub, over one ordered transcript."
       lede="Quorus does not run your agents. It is the place the planners on each machine meet, and the place you can see them meeting."
     >

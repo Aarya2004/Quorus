@@ -1,4 +1,3 @@
-import Decisions from "./components/Decisions";
 import Footer from "./components/Footer";
 import Hero from "./components/Hero";
 import HowItWorks from "./components/HowItWorks";
@@ -23,7 +22,6 @@ export default function App() {
         <Tools />
         <View />
         <SelfHost />
-        <Decisions />
       </main>
       <Footer />
     </>

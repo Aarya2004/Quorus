@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-09-04 (**website rewritten** for the TypeScript rebuild — single-route Vite/React landing, copy mirrors README + ADRs, hero replays a Room; PR pending Aarya's review. Dead-code sweep: PRs #1/#2. 2026-08-31: **@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
+Last updated: 2026-09-04 (**website rewritten** for the TypeScript rebuild — single-route Vite/React landing, copy mirrors the README, hero replays a Room; PR #3 under Aarya's review. Dead-code sweep: PRs #1/#2. 2026-08-31: **@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
 subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
 `mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
 autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
@@ -330,7 +330,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
-| 2026-09-04 | feat: website rewrite — clean/futuristic landing for the rebuild (Archivo wide display, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table, ADR index); old v1 marketing + fake console deleted |
+| 2026-09-04 | feat: website rewrite — clean landing for the rebuild (IBM Plex, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table; links only to GitHub/README, no personal names); old v1 marketing + fake console deleted |
 | 2026-09-04 | chore: dead-code sweep (PRs #1, #2) — only unused export was log.ts `Level`; comments stale since ADR 0007 fixed; suppress-warnings.ts confirmed live on Node 22 only |
 | 2026-08-31 | feat: @mentions (ADR 0012, TDD, codex-implemented) — roster-validated mentions metadata send→store→query→view, mentions_me filter, view emphasis + autocomplete; dogfood rolled |
 | 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
