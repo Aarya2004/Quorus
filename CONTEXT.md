@@ -377,8 +377,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
 - **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
 - **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
-  MCP sessions are ephemeral (cold start drops them) — a 404 after idle is
-  expected (ADR 0004). Single-machine is load-bearing (WAL + in-memory sessions).
+  identity is per request (ADR 0007), so a cold start costs modern clients only
+  latency; legacy clients still see ADR 0004's 404 after idle and re-initialize.
+  Single-machine is load-bearing (SQLite WAL on a local volume).
 - **Auth is implemented and fail-closed** (ADR 0005, landed 2026-06-02): identity is
   *derived* from a per-Member Token, not self-asserted — a shared token was rejected
   because it leaves Member attribution forgeable (the core product bet). No config
