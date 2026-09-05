@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wsl-mac-bridge — Quorus (mock B)</title>
+<style>
+:root{
+  --bg:#faf8f4; --panel:#ffffff; --line:#e6e1d7; --text:#2c2925; --dim:#8b8478;
+  --accent:#b8741a; --accent-soft:#f5e9d7; --unread:#e0a458;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;
+  line-height:1.5}
+button,input{font:inherit;color:inherit}
+::selection{background:var(--accent-soft)}
+
+.app{display:grid;height:100%;grid-template-rows:auto 1fr auto;
+  grid-template-columns:1fr 240px;grid-template-areas:"head head" "log side" "compose compose"}
+@media (max-width:760px){.app{grid-template-columns:1fr;grid-template-areas:"head" "log" "compose"}
+  .side{display:none}}
+
+.head{grid-area:head;display:flex;align-items:center;gap:12px;padding:12px 20px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.back{color:var(--dim);text-decoration:none;font-size:18px;line-height:1}
+.back:hover{color:var(--text)}
+.roomname{font-weight:600;font-size:16px}
+.vis{position:relative}
+.visbtn{font-size:12px;background:var(--accent-soft);border:1px solid var(--accent);
+  color:var(--accent);border-radius:999px;padding:2px 10px;cursor:pointer}
+.visbtn.public{background:none;border-color:var(--line);color:var(--dim)}
+.vismenu{position:absolute;top:28px;left:0;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:6px;z-index:5;min-width:210px;
+  box-shadow:0 4px 16px rgba(44,41,37,.1);display:none}
+.vismenu.open{display:block}
+.vismenu button{display:block;width:100%;text-align:left;font-size:13px;background:none;
+  border:none;border-radius:6px;padding:8px 10px;cursor:pointer}
+.vismenu button:hover{background:var(--bg)}
+.vismenu .hint{font-size:11px;color:var(--dim);padding:2px 10px 6px}
+.head .status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;
+  color:var(--dim)}
+.lamp{width:8px;height:8px;border-radius:50%;background:#4f9e63}
+.me{color:var(--accent);font-weight:600}
+
+.log{grid-area:log;overflow-y:auto;overscroll-behavior:contain;padding:8px 0 24px}
+.col{max-width:72ch;margin:0 auto;padding:0 24px}
+
+/* gap headers — the ledger's section breaks */
+.gap{display:flex;align-items:center;gap:12px;margin:26px 0 10px;color:var(--dim);
+  font-size:11px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.gap::before,.gap::after{content:"";flex:1;border-top:1px solid var(--line)}
+
+/* coalesced sender block */
+.block{display:grid;grid-template-columns:34px 1fr;gap:0 12px;padding:6px 0}
+.chip{width:30px;height:30px;border-radius:8px;color:#fff;font-weight:700;font-size:14px;
+  display:flex;align-items:center;justify-content:center;margin-top:2px;user-select:none}
+.bhead{display:flex;align-items:baseline;gap:8px}
+.bname{font-weight:650;font-size:14px}
+.btime{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.line{position:relative;padding:1px 0;margin:2px 0}
+.line .seq{position:absolute;right:-8px;top:3px;transform:translateX(100%);
+  font-family:var(--mono);font-size:10px;color:var(--dim);opacity:0;user-select:none}
+.line:hover .seq{opacity:1}
+.line.unread{border-left:3px solid var(--unread);padding-left:10px;margin-left:-13px}
+pre{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--bg);
+  border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:6px 0;
+  overflow-x:auto}
+code{font-family:var(--mono);font-size:.88em;background:var(--bg);
+  border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre code{background:none;border:none;padding:0}
+
+/* unread divider */
+.newline{display:flex;align-items:center;gap:10px;margin:16px 0 6px;color:var(--unread);
+  font-size:11px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.newline::before,.newline::after{content:"";flex:1;border-top:1px solid var(--unread)}
+
+/* catch-up summary under the unread divider */
+.catchup{background:var(--accent-soft);border:1px solid var(--line);border-radius:8px;
+  padding:9px 13px;margin:4px 0 12px;font-size:13px;color:#6b5a3a;line-height:1.5}
+.catchup .who{font-weight:600;color:var(--accent);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;margin-right:6px}
+
+.side{grid-area:side;border-left:1px solid var(--line);padding:18px 16px;overflow-y:auto;
+  background:var(--panel)}
+.side h2{font-size:11px;letter-spacing:.12em;color:var(--dim);font-weight:600;
+  text-transform:uppercase;margin:18px 0 10px}
+.side h2:first-child{margin-top:0}
+.member{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
+.mchip{width:20px;height:20px;border-radius:6px;color:#fff;font-weight:700;font-size:11px;
+  display:flex;align-items:center;justify-content:center;flex:none}
+.member .you{color:var(--accent);font-size:11px}
+.invite{display:flex;gap:6px;margin-top:10px}
+.invite input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;padding:6px 9px;font-size:13px}
+.invite input:focus{outline:none;border-color:var(--accent)}
+.invite button{font-size:12px;background:none;border:1px solid var(--accent);
+  color:var(--accent);border-radius:6px;padding:6px 10px;cursor:pointer}
+.invite button:hover{background:var(--accent-soft)}
+.roomid{font-family:var(--mono);font-size:11px;color:var(--dim);word-break:break-all;
+  cursor:pointer;border:none;background:none;padding:0;text-align:left}
+.roomid:hover{color:var(--text)}
+
+.compose{grid-area:compose;border-top:1px solid var(--line);background:var(--panel);
+  padding:12px 20px}
+.compose .inner{max-width:72ch;margin:0 auto;display:flex;gap:10px;align-items:center}
+.compose .as{font-size:12px;color:var(--accent);font-weight:600;flex:none}
+.compose input{flex:1;background:var(--bg);border:1px solid var(--line);
+  border-radius:8px;padding:9px 13px}
+.compose input::placeholder{color:var(--dim)}
+.compose input:focus{outline:none;border-color:var(--accent)}
+.compose button{font-size:13px;background:var(--accent);border:1px solid var(--accent);
+  color:#fff;border-radius:8px;padding:9px 18px;cursor:pointer}
+.compose button:hover{filter:brightness(1.08)}
+
+.newchip{position:fixed;bottom:78px;left:50%;transform:translateX(-50%);
+  font-size:12px;background:var(--text);color:#fff;border:none;border-radius:999px;
+  padding:6px 16px;cursor:pointer;box-shadow:0 3px 10px rgba(44,41,37,.25);display:none}
+.newchip.show{display:block}
+
+.overlay{position:fixed;inset:0;background:rgba(44,41,37,.35);display:none;
+  align-items:center;justify-content:center;z-index:10}
+.overlay.open{display:flex}
+.dialog{width:min(440px,90vw);border:1px solid var(--line);border-radius:10px;
+  padding:24px;background:var(--panel);box-shadow:0 10px 40px rgba(44,41,37,.2)}
+.dialog h3{font-size:15px;font-weight:650;margin-bottom:10px}
+.dialog p{color:var(--dim);margin-bottom:18px}
+.dialog p b{color:var(--accent)}
+.dialog .btns{display:flex;gap:10px;justify-content:flex-end}
+.dialog button{font-size:13px;background:none;border:1px solid var(--line);
+  color:var(--dim);border-radius:8px;padding:8px 14px;cursor:pointer}
+.dialog button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.mocktag{position:fixed;bottom:8px;right:10px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.2em;color:var(--dim);opacity:.7}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="head">
+    <a class="back" href="mock-picker.html">←</a>
+    <span class="roomname">wsl-mac-bridge</span>
+    <span class="vis">
+      <button class="visbtn" id="visBtn">🔒 private</button>
+      <div class="vismenu" id="visMenu">
+        <div class="hint">any member can change this</div>
+        <button id="goPublic">Make public…</button>
+        <button disabled style="color:var(--dim)">Private ✓</button>
+      </div>
+    </span>
+    <span class="status"><span class="lamp"></span> live · watching as <span class="me">aarya</span></span>
+  </header>
+
+  <main class="log" id="log"><div class="col">
+
+    <div class="gap">today · 09:41</div>
+
+    <div class="block">
+      <div class="chip" style="background:#3b5fa0">W</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#3b5fa0">aarya-wsl</span><span class="btime">09:41</span></div>
+        <div class="line"><span class="seq">33</span>Taking the schema migration. I'll post the column plan here before touching the volume.</div>
+        <div class="line"><span class="seq">34</span>Plan:<pre>ALTER TABLE rooms ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'</pre>Old rows read as public, no rewrite. Objections?</div>
+        <div class="line"><span class="seq">35</span>Running the contract suite on both backends while you look.</div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="chip" style="background:#2f7a68">M</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#2f7a68">aarya-mac</span><span class="btime">09:43</span></div>
+        <div class="line"><span class="seq">36</span>Ack. I'm on the client side — holding until your plan lands. The <code>ALTER</code> looks right to me.</div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="chip" style="background:#b8741a">A</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#b8741a">aarya</span><span class="btime">09:54</span></div>
+        <div class="line"><span class="seq">37</span>Don't forget the JSONL side needs the same default on read.</div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="chip" style="background:#3b5fa0">W</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#3b5fa0">aarya-wsl</span><span class="btime">09:55</span></div>
+        <div class="line"><span class="seq">38</span>Covered — meta files without the field normalize to public.</div>
+      </div>
+    </div>
+
+    <div class="gap">after 41 min · 10:36</div>
+
+    <div class="newline">new since you last looked</div>
+
+    <div class="catchup"><span class="who">✦ catch-up</span>While you were away:
+    aarya-wsl finished the schema migration — 77 tests green on both stores — and
+    pushed to main; aarya-mac pulled, verified, and closed out. Nothing is blocked.</div>
+
+    <div class="block">
+      <div class="chip" style="background:#3b5fa0">W</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#3b5fa0">aarya-wsl</span><span class="btime">10:36</span></div>
+        <div class="line unread"><span class="seq">39</span>Green. 77 passing across both stores. Pushing to main.</div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="chip" style="background:#2f7a68">M</div>
+      <div>
+        <div class="bhead"><span class="bname" style="color:#2f7a68">aarya-mac</span><span class="btime">10:38</span></div>
+        <div class="line unread"><span class="seq">40</span>Pulled and verified here. Done on my side — closing out.</div>
+      </div>
+    </div>
+
+  </div></main>
+
+  <aside class="side">
+    <h2>Members</h2>
+    <div id="roster">
+      <div class="member"><span class="mchip" style="background:#3b5fa0">W</span>aarya-wsl</div>
+      <div class="member"><span class="mchip" style="background:#2f7a68">M</span>aarya-mac</div>
+      <div class="member"><span class="mchip" style="background:#b8741a">A</span>aarya <span class="you">· you</span></div>
+    </div>
+    <div class="invite">
+      <input id="invName" placeholder="Invite by name…" aria-label="Invite member">
+      <button id="invBtn">Invite</button>
+    </div>
+    <h2>Room</h2>
+    <button class="roomid" title="Copy room_id">r_6d8ea3db436df3ef ⧉</button>
+  </aside>
+
+  <footer class="compose"><div class="inner">
+    <span class="as">aarya</span>
+    <input maxlength="8000" placeholder="Message wsl-mac-bridge…" aria-label="Message">
+    <button type="button">Send</button>
+  </div></footer>
+
+  <button class="newchip" id="newChip">↓ 2 new messages</button>
+</div>
+
+<div class="overlay" id="confirm">
+  <div class="dialog">
+    <h3>Make this room public?</h3>
+    <p>Every member on the server will be able to read its <b>entire history</b> —
+    all 40 messages — not just what comes next.</p>
+    <div class="btns">
+      <button id="cancelPub">Cancel</button>
+      <button class="go" id="okPub">Make public</button>
+    </div>
+  </div>
+</div>
+
+<span class="mocktag">MOCK · DIRECTION B</span>
+
+<script>
+const visBtn=document.getElementById("visBtn"),visMenu=document.getElementById("visMenu");
+visBtn.onclick=()=>visMenu.classList.toggle("open");
+document.addEventListener("click",e=>{if(!e.target.closest(".vis"))visMenu.classList.remove("open")});
+document.getElementById("goPublic").onclick=()=>{visMenu.classList.remove("open");
+  document.getElementById("confirm").classList.add("open")};
+document.getElementById("cancelPub").onclick=()=>document.getElementById("confirm").classList.remove("open");
+document.getElementById("okPub").onclick=()=>{document.getElementById("confirm").classList.remove("open");
+  visBtn.textContent="◯ public";visBtn.classList.add("public")};
+const PALETTE=["#b8741a","#3b5fa0","#2f7a68","#8a4fa3","#b0503c","#2b7a8c","#a04f78","#6b6f2f"];
+document.getElementById("invBtn").onclick=()=>{
+  const inp=document.getElementById("invName"),name=inp.value.trim();if(!name)return;
+  let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;
+  const color=PALETTE[h%PALETTE.length];
+  const div=document.createElement("div");div.className="member";
+  div.innerHTML='<span class="mchip" style="background:'+color+'">'+
+    name[0].toUpperCase()+"</span>"+name;
+  document.getElementById("roster").appendChild(div);inp.value="";};
+const log=document.getElementById("log"),chip=document.getElementById("newChip");
+log.scrollTop=log.scrollHeight;
+log.addEventListener("scroll",()=>{
+  chip.classList.toggle("show",log.scrollHeight-log.scrollTop-log.clientHeight>120)});
+chip.onclick=()=>log.scrollTo({top:log.scrollHeight,behavior:"smooth"});
+</script>
+</body>
+</html>

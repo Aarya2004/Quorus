@@ -15,9 +15,17 @@ export interface StoredMessage {
   /** The Member who sent it. */
   from: string;
   text: string;
+  /** Members whose attention this Message requests. Absent when none. */
+  mentions?: string[];
   /** Unix epoch milliseconds. Display only — ordering comes from `seq`. */
   ts: number;
 }
+
+/**
+ * Whether a Room is open to any Member (public) or gated to its roster
+ * (private: only its Members may read, send, or discover it — ADR 0009).
+ */
+export type Visibility = "public" | "private";
 
 /** A Room and its membership roster. */
 export interface RoomRecord {
@@ -25,7 +33,22 @@ export interface RoomRecord {
   name: string;
   /** Membership: the Members that belong to this Room (recorded on join). */
   members: string[];
+  visibility: Visibility;
   createdAt: number;
+}
+
+/**
+ * The roster gate (ADR 0009), shared by the MCP tools and the view API so the
+ * boundary is never enforced in the browser page alone. To a Member without
+ * access, a private Room must be indistinguishable from a nonexistent one.
+ */
+export function canAccess(room: RoomRecord, member: string): boolean {
+  return room.visibility === "public" || room.members.includes(member);
+}
+
+/** The roster-only mention rule (ADR 0012); returns the first invalid name. */
+export function invalidMention(room: RoomRecord, mentions?: string[]): string | undefined {
+  return mentions?.find((name) => !room.members.includes(name));
 }
 
 /** Raised when an operation targets a Room that does not exist. */
