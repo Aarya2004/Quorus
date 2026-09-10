@@ -4,6 +4,10 @@ status: accepted
 
 # Scale-to-zero host with ephemeral MCP sessions
 
+> Session behavior superseded by ADR 0007. Both modern and legacy HTTP requests
+> are now stateless; the session-loss 404 below describes the historical design.
+> Scale-to-zero remains in use. Clarified 2026-09-09.
+
 The Fly deploy runs **one machine that scales to zero** when idle
 (`min_machines_running = 0`, `auto_stop_machines = "stop"`). The MCP session map
 in `src/server/app.ts` is **in-memory**, so a cold start drops all live

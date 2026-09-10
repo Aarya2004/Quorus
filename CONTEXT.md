@@ -307,7 +307,7 @@ send → poll all work).* Roadmap:
    exists — see Landscape.*
 4. **MCP 2026-07-28 / SDK v2 migration — ✅ DONE (2026-08-24, ADR 0007, TDD).** Identity is
    per-request (Bearer → Member on every call; sessions Map deleted, the ADR 0004 cold-start
-   404 gone for modern clients). Rooms are subscribable resources; `send_message` publishes an
+   session-loss 404 gone for both eras). Rooms are subscribable resources; `send_message` publishes an
    updated-ping to open `subscriptions/listen` streams. Legacy 2025-era clients are served by
    the SDK's stateless fallback — verified in e2e with the v1 client.
 5. **Delivery (deferred, ADR 0006)** — stays manual/poll. The server now *emits* pings, but no
@@ -377,8 +377,9 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 - **`Store` seam** from line one so persistence can change without touching the MCP layer.
 - **Persistence**: Node's built-in `node:sqlite` (no native addon), single-node (ADR 0002).
 - **Deploy host**: one Fly machine, **scale-to-zero**, 3 GB volume for SQLite;
-  identity is per request (ADR 0007), so a cold start costs modern clients only
-  latency; legacy clients still see ADR 0004's 404 after idle and re-initialize.
+  identity is per request for both modern and legacy clients (ADR 0007's
+  stateless fallback). Cold starts add latency and disconnect open streams;
+  clients reconnect and catch up with their seq cursor, without a session-loss 404.
   Single-machine is load-bearing (SQLite WAL on a local volume).
 - **Auth is implemented and fail-closed** (ADR 0005, landed 2026-06-02): identity is
   *derived* from a per-Member Token, not self-asserted — a shared token was rejected

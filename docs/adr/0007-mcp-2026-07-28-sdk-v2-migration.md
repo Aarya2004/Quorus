@@ -69,7 +69,10 @@ server→client notification stream. Facts and sources:
   and store layers are untouched (the Store seam holds). Single-process
   in-memory notification fan-out suffices (single-machine is load-bearing
   per ADR 0004); a shared `ServerEventBus` exists if that ever changes.
-- ADR 0004's ephemeral-session caveat becomes moot for 2026-07-28 clients;
-  it still applies to legacy-mode clients until compatibility is dropped.
+- ADR 0004's ephemeral-session caveat is superseded for both eras. The
+  configured legacy fallback also uses stateless per-request serving; it does
+  not mint session IDs or keep a session map. Cold starts add latency and
+  disconnect open streams, which clients reconnect using their seq cursor.
+  (Implementation clarification, 2026-09-09.)
 - The codemod covers only surface renames — the architectural move to
   `createMcpHandler` is hand-written, test-first.
