@@ -220,6 +220,7 @@ export function createMcpServer(
         if (!room.members.includes(member))
           return fail("Only a member of the Room can change its visibility. Join it first.");
         const updated = await store.setVisibility(room_id, visibility);
+        onRoomChanged?.(room_id);
         return ok(`"${updated.name}" (${updated.roomId}) is now ${updated.visibility}.`, {
           ...updated,
         });

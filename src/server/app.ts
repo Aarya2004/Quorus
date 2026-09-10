@@ -1,9 +1,10 @@
-import { createMcpHandler } from "@modelcontextprotocol/server";
+import { createMcpHandler, InMemoryServerEventBus } from "@modelcontextprotocol/server";
 import { Hono } from "hono";
 import type { AuthConfig } from "../config";
 import { log } from "../log";
 import type { Store } from "../store/store";
 import { resolveMember } from "./auth";
+import { roomSubscriptions } from "./subscriptions";
 import { createMcpServer, roomUri } from "./tools";
 import { registerViewApi } from "./view";
 
@@ -23,8 +24,10 @@ import { registerViewApi } from "./view";
  * hint; delivery truth stays the `get_messages` seq cursor (ADR 0006).
  */
 export function createApp(store: Store, auth: AuthConfig): Hono {
+  const bus = new InMemoryServerEventBus();
+  const subscriptions = roomSubscriptions(store, bus);
   const onRoomChanged = (roomId: string): void => {
-    handler.notify.resourceUpdated(roomUri(roomId));
+    bus.publish({ kind: "resource_updated", uri: roomUri(roomId) });
   };
   const handler = createMcpHandler(
     (ctx) => {
@@ -32,7 +35,7 @@ export function createApp(store: Store, auth: AuthConfig): Hono {
       if (!member) throw new Error("request reached the MCP handler without a resolved Member");
       return createMcpServer(store, member, onRoomChanged);
     },
-    { onerror: (err) => log.error("mcp.error", { error: err.message }) },
+    { bus: subscriptions.bus, onerror: (err) => log.error("mcp.error", { error: err.message }) },
   );
 
   const app = new Hono();
@@ -46,12 +49,23 @@ export function createApp(store: Store, auth: AuthConfig): Hono {
     }
     const header = c.req.header("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-    return handler.fetch(c.req.raw, {
-      authInfo: { token, clientId: member, scopes: [], extra: { member } },
-    });
+    const body =
+      c.req.method === "POST"
+        ? await c.req.raw
+            .clone()
+            .json()
+            .catch(() => undefined)
+        : undefined;
+    const parsedBody = await subscriptions.filter(body, member);
+    return subscriptions.run(member, () =>
+      handler.fetch(c.req.raw, {
+        parsedBody,
+        authInfo: { token, clientId: member, scopes: [], extra: { member } },
+      }),
+    );
   });
 
-  registerViewApi(app, store, auth, handler.bus, onRoomChanged);
+  registerViewApi(app, store, auth, bus, onRoomChanged);
 
   return app;
 }

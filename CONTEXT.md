@@ -330,6 +330,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-09-09 | PR review fixes: revoke private Room browser streams, authorize MCP subscriptions at request and delivery, transact message/mentions writes; shared backend becomes the base of the three-PR stack |
 | 2026-08-31 | feat: @mentions (ADR 0012, TDD, codex-implemented) — roster-validated mentions metadata send→store→query→view, mentions_me filter, view emphasis + autocomplete; dogfood rolled |
 | 2026-08-31 | feat: view v2 (ADR 0010, TDD) — chat-native session ledger page; POST /api/rooms + invite + visibility; picker previews |
 | 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
@@ -339,7 +340,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 | 2026-08-24 | feat: MCP 2026-07-28 / SDK v2 — per-request identity, Rooms as subscribable resources, legacy fallback (ADR 0007, TDD) |
 | 2026-08-24 | docs: primary-source research — MCP SDK v2 GA (2.0.0, 2026-07-27) + 2026-07-28 spec migration facts (`docs/research/2026-08-24-mcp-sdk-v2-migration.md`) |
-| 2026-08-24 | ops: 24/7 dogfood deploy — Docker on WSL (`aarya-desktop`) over Tailscale; token auth verified live |
 
 ---
 

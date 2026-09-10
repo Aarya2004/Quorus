@@ -120,6 +120,7 @@ export function registerViewApi(
     const gate = await memberRoom(c, member, c.req.param("id"));
     if (gate.err) return gate.err;
     const updated = await store.setVisibility(gate.room.roomId, parsed.data.visibility);
+    notifyRoomChanged(updated.roomId);
     log.info("view.visibility", { member, room: updated.roomId, visibility: updated.visibility });
     return c.json(updated);
   });
@@ -188,14 +189,30 @@ export function registerViewApi(
       // Serialize pushes so concurrent pings can't interleave frames.
       let chain: Promise<void> = Promise.resolve();
       const push = (): Promise<void> => {
-        chain = chain.then(async () => {
-          if (!open) return;
-          const fresh = await store.getMessages(roomId, cursor);
-          for (const m of fresh) {
-            cursor = Math.max(cursor, m.seq);
-            await stream.writeSSE({ data: JSON.stringify(m) });
-          }
-        });
+        chain = chain
+          .then(async () => {
+            if (!open) return;
+            const authorized = async () => {
+              const current = await store.getRoom(roomId);
+              if (open && current && canAccess(current, member)) return true;
+              stream.abort();
+              return false;
+            };
+            if (!(await authorized())) return;
+            const fresh = await store.getMessages(roomId, cursor);
+            for (const m of fresh) {
+              // Writes yield: visibility may change while a slow reader catches up.
+              if (!(await authorized())) return;
+              cursor = Math.max(cursor, m.seq);
+              await stream.writeSSE({ data: JSON.stringify(m) });
+            }
+          })
+          .catch((err) => {
+            log.error("view.stream", {
+              error: err instanceof Error ? err.message : "stream failed",
+            });
+            stream.abort();
+          });
         return chain;
       };
 

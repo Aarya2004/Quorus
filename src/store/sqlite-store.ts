@@ -144,24 +144,33 @@ export class SqliteStore implements Store {
     text: string,
     mentions?: string[],
   ): Promise<StoredMessage> {
-    const exists = this.db.prepare("SELECT 1 FROM rooms WHERE room_id = ?").get(roomId);
-    if (!exists) throw new RoomNotFoundError(roomId);
-    const { max } = this.db
-      .prepare("SELECT COALESCE(MAX(seq), 0) AS max FROM messages WHERE room_id = ?")
-      .get(roomId) as unknown as { max: number };
-    const seq = max + 1;
-    const ts = Date.now();
-    this.db
-      .prepare("INSERT INTO messages (room_id, seq, from_member, text, ts) VALUES (?, ?, ?, ?, ?)")
-      .run(roomId, seq, from, text, ts);
-    const normalizedMentions = mentions?.length ? [...new Set(mentions)] : undefined;
-    if (normalizedMentions) {
-      const insertMention = this.db.prepare(
-        "INSERT INTO message_mentions (room_id, seq, member) VALUES (?, ?, ?)",
-      );
-      for (const member of normalizedMentions) insertMention.run(roomId, seq, member);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const exists = this.db.prepare("SELECT 1 FROM rooms WHERE room_id = ?").get(roomId);
+      if (!exists) throw new RoomNotFoundError(roomId);
+      const { max } = this.db
+        .prepare("SELECT COALESCE(MAX(seq), 0) AS max FROM messages WHERE room_id = ?")
+        .get(roomId) as unknown as { max: number };
+      const seq = max + 1;
+      const ts = Date.now();
+      this.db
+        .prepare(
+          "INSERT INTO messages (room_id, seq, from_member, text, ts) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(roomId, seq, from, text, ts);
+      const normalizedMentions = mentions?.length ? [...new Set(mentions)] : undefined;
+      if (normalizedMentions) {
+        const insertMention = this.db.prepare(
+          "INSERT INTO message_mentions (room_id, seq, member) VALUES (?, ?, ?)",
+        );
+        for (const member of normalizedMentions) insertMention.run(roomId, seq, member);
+      }
+      this.db.exec("COMMIT");
+      return { seq, from, text, ...(normalizedMentions && { mentions: normalizedMentions }), ts };
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
-    return { seq, from, text, ...(normalizedMentions && { mentions: normalizedMentions }), ts };
   }
 
   private toMessage(roomId: string, row: MessageRow): StoredMessage {
