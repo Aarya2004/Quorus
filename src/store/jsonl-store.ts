@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RoomNotFoundError, type RoomRecord, type StoredMessage } from "../domain/types";
+import {
+  RoomNotFoundError,
+  type RoomRecord,
+  type StoredMessage,
+  type Visibility,
+} from "../domain/types";
 import { log } from "../log";
 import type { Store } from "./store";
 
@@ -52,7 +57,9 @@ export class JsonlStore implements Store {
   private async readMeta(roomId: string): Promise<RoomRecord | undefined> {
     try {
       const raw = await readFile(this.metaPath(roomId), "utf8");
-      return JSON.parse(raw) as RoomRecord;
+      // Pre-0009 meta files lack visibility; existing Rooms stay public.
+      const meta = JSON.parse(raw) as Omit<RoomRecord, "visibility"> & { visibility?: Visibility };
+      return { ...meta, visibility: meta.visibility ?? "public" };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw err;
@@ -92,12 +99,34 @@ export class JsonlStore implements Store {
     return seq;
   }
 
-  async createRoom(name: string, creator: string): Promise<RoomRecord> {
+  async createRoom(
+    name: string,
+    creator: string,
+    visibility: Visibility = "public",
+  ): Promise<RoomRecord> {
     const roomId = `r_${randomBytes(8).toString("hex")}`;
-    const meta: RoomRecord = { roomId, name, members: [creator], createdAt: Date.now() };
+    const meta: RoomRecord = {
+      roomId,
+      name,
+      members: [creator],
+      visibility,
+      createdAt: Date.now(),
+    };
     await this.writeMeta(meta);
     this.seqCache.set(roomId, 0);
     return { ...meta, members: [...meta.members] };
+  }
+
+  async setVisibility(roomId: string, visibility: Visibility): Promise<RoomRecord> {
+    return this.withLock(roomId, async () => {
+      const meta = await this.readMeta(roomId);
+      if (!meta) throw new RoomNotFoundError(roomId);
+      if (meta.visibility !== visibility) {
+        meta.visibility = visibility;
+        await this.writeMeta(meta);
+      }
+      return { ...meta, members: [...meta.members] };
+    });
   }
 
   async getRoom(roomId: string): Promise<RoomRecord | undefined> {
@@ -117,12 +146,24 @@ export class JsonlStore implements Store {
     });
   }
 
-  async appendMessage(roomId: string, from: string, text: string): Promise<StoredMessage> {
+  async appendMessage(
+    roomId: string,
+    from: string,
+    text: string,
+    mentions?: string[],
+  ): Promise<StoredMessage> {
     return this.withLock(roomId, async () => {
       const meta = await this.readMeta(roomId);
       if (!meta) throw new RoomNotFoundError(roomId);
       const last = await this.loadLatestSeq(roomId);
-      const msg: StoredMessage = { seq: last + 1, from, text, ts: Date.now() };
+      const normalizedMentions = mentions?.length ? [...new Set(mentions)] : undefined;
+      const msg: StoredMessage = {
+        seq: last + 1,
+        from,
+        text,
+        ...(normalizedMentions && { mentions: normalizedMentions }),
+        ts: Date.now(),
+      };
       await mkdir(this.roomDir(roomId), { recursive: true });
       await appendFile(this.logPath(roomId), `${JSON.stringify(msg)}\n`, "utf8");
       this.seqCache.set(roomId, msg.seq);
@@ -130,7 +171,7 @@ export class JsonlStore implements Store {
     });
   }
 
-  async getMessages(roomId: string, since = 0): Promise<StoredMessage[]> {
+  async getMessages(roomId: string, since = 0, mentioning?: string): Promise<StoredMessage[]> {
     const meta = await this.readMeta(roomId);
     if (!meta) throw new RoomNotFoundError(roomId);
 
@@ -147,8 +188,17 @@ export class JsonlStore implements Store {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
-        const msg = JSON.parse(trimmed) as StoredMessage;
-        if (typeof msg.seq === "number" && msg.seq > since) out.push(msg);
+        const parsed = JSON.parse(trimmed) as StoredMessage;
+        const mentions = parsed.mentions?.length ? parsed.mentions : undefined;
+        const msg = { ...parsed, mentions };
+        if (mentions === undefined) delete msg.mentions;
+        if (
+          typeof msg.seq === "number" &&
+          msg.seq > since &&
+          (mentioning === undefined || msg.mentions?.includes(mentioning))
+        ) {
+          out.push(msg);
+        }
       } catch {
         // Skip malformed lines rather than failing the whole read, but record
         // it — a corrupt line is silent data loss worth seeing in the logs.

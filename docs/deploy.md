@@ -40,17 +40,18 @@ Example MCP client config:
 }
 ```
 
-Identity is bound per connection — no tool takes a `from`. In token mode the
+Identity is bound per request — no tool takes a `from`. In token mode the
 Member name is **derived from the token**, not asserted by the client; a
 `x-quorus-member` header is optional and, if sent, must match the token's Member
-or the connection is rejected (ADR 0005).
+or the request is rejected (ADR 0005).
 
 ## Expected behaviour, not bugs
 
-- **`404 "unknown session"` after the host has been idle.** The machine scales
-  to zero; a cold start wipes the in-memory session map. Well-behaved MCP
-  clients re-`initialize` automatically and re-supply the bearer token.
-  All Rooms/Messages are durable on the volume. See `docs/adr/0004`.
+- **Extra latency after the host has been idle.** The machine scales to zero.
+  Both modern requests and the legacy fallback are stateless (ADR 0007), so
+  there is no session map to lose and no session-loss 404 to recover from.
+  Open streams disconnect on shutdown; clients reconnect and use their seq
+  cursor to catch up. Rooms and Messages remain durable on the volume.
 
 ## Retention
 
