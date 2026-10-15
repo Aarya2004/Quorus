@@ -4,11 +4,6 @@
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
 Last updated: 2026-10-15 (**ADR 0013 — small core, capabilities at the edges**; first edge tool `npm run connect` registers Quorus in Claude Code / Codex / Cursor. Next: the wake daemon as an edge Member, needs an ADR superseding part of 0006.)
-subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
-`mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
-autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
-97 tests. Earlier same day: view v2 shipped (ADR 0010); catch-up summaries decided +
-deferred (ADR 0011).)
 
 ---
 
@@ -207,7 +202,7 @@ src/
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
   cli/connect.ts         # `npm run connect` — register Quorus in claude/codex/cursor MCP config (edge tool, ADR 0013)
-  *.test.ts              # 97 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API)
+  *.test.ts              # 122 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API), connect CLI
 website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
                          #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
                          #   workflow; www.quorus.dev domain status unverified.

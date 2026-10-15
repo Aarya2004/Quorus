@@ -5,8 +5,9 @@
 // server is unaware of it and it is not part of the server bundle.
 
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { parseArgs, promisify } from "node:util";
 import { z } from "zod";
 
@@ -31,7 +32,11 @@ export type Step =
 
 type McpEntry = { url: string; headers: Record<string, string> };
 
-export type Plan = { steps: Step[]; notes: string[] };
+/** `complete: false` means the user has a step left (in `notes`) before the agent can connect. */
+export type Plan = { steps: Step[]; notes: string[]; complete: boolean };
+
+/** Where the user's config lives and what their shell holds. */
+export type Machine = { home: string; env: NodeJS.ProcessEnv };
 
 export const USAGE = `Usage: npm run connect -- <claude|codex|cursor> --url <server-url> [--token <token> | --member <name>]
 
@@ -81,7 +86,7 @@ export function toMcpUrl(raw: string): string {
 }
 
 /** What connecting `agent` takes. Pure: no I/O, so each agent's wiring is testable. */
-export function planConnect(opts: ConnectOptions, home: string): Plan {
+export function planConnect(opts: ConnectOptions, { home, env }: Machine): Plan {
   const auth = `Bearer ${opts.credential}`;
   switch (opts.agent) {
     case "claude":
@@ -112,6 +117,7 @@ export function planConnect(opts: ConnectOptions, home: string): Plan {
           },
         ],
         notes: ["Restart Claude Code to load the server."],
+        complete: true,
       };
     case "codex":
       return {
@@ -132,10 +138,7 @@ export function planConnect(opts: ConnectOptions, home: string): Plan {
             mayFail: false,
           },
         ],
-        notes: [
-          `Codex reads the credential from ${TOKEN_ENV}. Add this to your shell profile:`,
-          `  export ${TOKEN_ENV}=<your credential>`,
-        ],
+        ...codexEnvNotes(env[TOKEN_ENV], opts.credential),
       };
     case "cursor":
       return {
@@ -147,6 +150,7 @@ export function planConnect(opts: ConnectOptions, home: string): Plan {
           },
         ],
         notes: ["Reload Cursor to load the server."],
+        complete: true,
       };
     default: {
       const _exhaustive: never = opts.agent;
@@ -155,19 +159,64 @@ export function planConnect(opts: ConnectOptions, home: string): Plan {
   }
 }
 
+/** Codex authenticates with whatever its environment holds, not what we checked. */
+function codexEnvNotes(current: string | undefined, credential: string) {
+  if (current === credential) {
+    return { notes: [`Codex reads ${TOKEN_ENV}, which this shell already holds.`], complete: true };
+  }
+  const export_ = `  export ${TOKEN_ENV}=<your credential>`;
+  return {
+    notes: current
+      ? [
+          `${TOKEN_ENV} in this shell holds a different credential. Codex would use that one; set:`,
+          export_,
+        ]
+      : [`Codex reads the credential from ${TOKEN_ENV}. Add this to your shell profile:`, export_],
+    complete: false,
+  };
+}
+
+/** `err.code` from a Node system error, without trusting the shape. */
+function errnoCode(err: unknown): string | undefined {
+  return typeof err === "object" && err !== null && "code" in err && typeof err.code === "string"
+    ? err.code
+    : undefined;
+}
+
+async function readIfExists(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (err) {
+    if (errnoCode(err) === "ENOENT") return undefined;
+    throw err;
+  }
+}
+
+/** Follow a symlinked config (dotfile managers) so we update the file, not replace the link. */
+async function resolveConfigPath(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch (err) {
+    if (errnoCode(err) !== "ENOENT") throw err;
+  }
+  const isLink = await lstat(path).then(
+    (s) => s.isSymbolicLink(),
+    () => false,
+  );
+  if (isLink)
+    throw new Error(`${path} is a symlink to a missing file; fix it or add the server by hand.`);
+  return path;
+}
+
 const McpJson = z.looseObject({ mcpServers: z.record(z.string(), z.unknown()).optional() });
 
 /**
  * Set `mcpServers.quorus` in an MCP JSON config, keeping everything else. Refuses a
  * file it can't parse rather than overwriting it.
  */
-export async function mergeMcpJson(path: string, entry: McpEntry): Promise<void> {
-  let text: string | undefined;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-  }
+export async function mergeMcpJson(link: string, entry: McpEntry): Promise<void> {
+  const path = await resolveConfigPath(link);
+  const text = await readIfExists(path);
   let config: z.infer<typeof McpJson> = {};
   if (text?.trim()) {
     let raw: unknown;
@@ -183,10 +232,20 @@ export async function mergeMcpJson(path: string, entry: McpEntry): Promise<void>
   }
   const next = { ...config, mcpServers: { ...config.mcpServers, [SERVER_NAME]: entry } };
   await mkdir(dirname(path), { recursive: true });
-  // Write-then-rename so a crash never leaves a half-written config. 0600: it holds a credential.
-  const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
-  await rename(tmp, path);
+  // Write-then-rename so a crash never leaves a half-written config. A fresh, exclusive
+  // temp file guarantees 0600 (it holds a credential); an existing one could keep its mode.
+  const tmp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+  await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  try {
+    // Narrow the read-modify-write race: never overwrite an edit made since we read.
+    if ((await readIfExists(path)) !== text) {
+      throw new Error(`${path} changed while connecting; run the command again.`);
+    }
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 const Me = z.object({ member: z.string() });
@@ -210,19 +269,23 @@ export async function whoAmI(mcpUrl: string, credential: string): Promise<string
   return me.data.member;
 }
 
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
 
-async function runStep(step: Step): Promise<void> {
+/** Run one step. `secret` is scrubbed from any child output we surface (it rides argv). */
+async function runStep(step: Step, secret: string): Promise<void> {
   if (step.kind === "merge-json") return mergeMcpJson(step.path, step.entry);
   const [cmd, ...args] = step.argv;
   try {
-    await run(cmd, args);
+    await execFileAsync(cmd, args);
   } catch (err) {
     if (step.mayFail) return;
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+    if (errnoCode(err) === "ENOENT") {
       throw new Error(`\`${cmd}\` is not on your PATH. Install it first.`);
     }
-    const stderr = (err as { stderr?: string }).stderr?.trim();
+    const stderr =
+      typeof err === "object" && err !== null && "stderr" in err && typeof err.stderr === "string"
+        ? err.stderr.replaceAll(secret, "<credential>").trim()
+        : "";
     throw new Error(
       `\`${cmd} ${args.slice(0, 2).join(" ")}\` failed${stderr ? `: ${stderr}` : "."}`,
     );
@@ -230,9 +293,12 @@ async function runStep(step: Step): Promise<void> {
 }
 
 /** Verify the credential, then apply the plan. Returns lines to show the user. */
-export async function connect(opts: ConnectOptions, home: string): Promise<string[]> {
+export async function connect(opts: ConnectOptions, machine: Machine): Promise<string[]> {
   const member = await whoAmI(opts.mcpUrl, opts.credential);
-  const plan = planConnect(opts, home);
-  for (const step of plan.steps) await runStep(step);
-  return [`Connected ${opts.agent} to ${opts.mcpUrl} as ${member}.`, ...plan.notes];
+  const plan = planConnect(opts, machine);
+  for (const step of plan.steps) await runStep(step, opts.credential);
+  const headline = plan.complete
+    ? `Connected ${opts.agent} to ${opts.mcpUrl} as ${member}.`
+    : `Configured ${opts.agent} for ${opts.mcpUrl} as ${member}. One step left:`;
+  return [headline, ...plan.notes];
 }

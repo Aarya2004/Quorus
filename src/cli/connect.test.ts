@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
@@ -65,7 +65,7 @@ describe("planConnect", () => {
   const opts = { mcpUrl: "http://h:8787/mcp", credential: "s3cret-tok" } as const;
 
   it("claude: remove-then-add at user scope with a bearer header", () => {
-    const { steps } = planConnect({ ...opts, agent: "claude" }, "/home/u");
+    const { steps } = planConnect({ ...opts, agent: "claude" }, { home: "/home/u", env: {} });
     expect(steps).toEqual([
       { kind: "exec", argv: ["claude", "mcp", "remove", "-s", "user", "quorus"], mayFail: true },
       {
@@ -89,7 +89,10 @@ describe("planConnect", () => {
   });
 
   it("codex: credential stays out of the config, read from the env var", () => {
-    const { steps, notes } = planConnect({ ...opts, agent: "codex" }, "/home/u");
+    const { steps, notes, complete } = planConnect(
+      { ...opts, agent: "codex" },
+      { home: "/home/u", env: {} },
+    );
     expect(steps).toEqual([
       {
         kind: "exec",
@@ -108,10 +111,21 @@ describe("planConnect", () => {
     ]);
     expect(JSON.stringify(steps)).not.toContain("s3cret");
     expect(notes.join("\n")).toContain(`export ${TOKEN_ENV}=`);
+    expect(complete).toBe(false);
+  });
+
+  it("codex: complete only when the env already holds the checked credential", () => {
+    const plan = (value: string) =>
+      planConnect({ ...opts, agent: "codex" }, { home: "/h", env: { [TOKEN_ENV]: value } });
+    expect(plan("s3cret-tok").complete).toBe(true);
+    const stale = plan("other");
+    expect(stale.complete).toBe(false);
+    expect(stale.notes.join("\n")).toMatch(/different credential/);
+    expect(stale.notes.join("\n")).not.toContain("other");
   });
 
   it("cursor: merges into ~/.cursor/mcp.json", () => {
-    const { steps } = planConnect({ ...opts, agent: "cursor" }, "/home/u");
+    const { steps } = planConnect({ ...opts, agent: "cursor" }, { home: "/home/u", env: {} });
     expect(steps).toEqual([
       {
         kind: "merge-json",
@@ -143,6 +157,37 @@ describe("mergeMcpJson", () => {
       other: 1,
       mcpServers: { a: { command: "x" }, quorus: entry },
     });
+  });
+
+  it("tightens an existing world-readable config to owner-only, leaving no temp files", async () => {
+    const dir = await tmp();
+    const path = join(dir, "mcp.json");
+    await writeFile(path, "{}", { mode: 0o644 });
+    await mergeMcpJson(path, entry);
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    expect(await readdir(dir)).toEqual(["mcp.json"]);
+  });
+
+  it("writes through a symlinked config, keeping the link", async () => {
+    const dir = await tmp();
+    const target = join(dir, "dotfiles-mcp.json");
+    const link = join(dir, "mcp.json");
+    await writeFile(target, JSON.stringify({ mcpServers: { a: { command: "x" } } }));
+    await symlink(target, link);
+    await mergeMcpJson(link, entry);
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(await readFile(target, "utf8")).mcpServers).toEqual({
+      a: { command: "x" },
+      quorus: entry,
+    });
+  });
+
+  it("refuses a symlink to a missing file", async () => {
+    const dir = await tmp();
+    const link = join(dir, "mcp.json");
+    await symlink(join(dir, "gone.json"), link);
+    await expect(mergeMcpJson(link, entry)).rejects.toThrow(/missing file/);
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
   });
 
   it("refuses files it can't parse, leaving them untouched", async () => {
@@ -184,14 +229,17 @@ describe("against a real server", () => {
   it("connect writes nothing when the credential is rejected", async () => {
     const home = await tmp();
     const opts = { agent: "cursor", mcpUrl: url, credential: "bad-token" } as const;
-    await expect(connect(opts, home)).rejects.toThrow(/rejected/);
+    await expect(connect(opts, { home, env: {} })).rejects.toThrow(/rejected/);
     await expect(stat(join(home, ".cursor", "mcp.json"))).rejects.toThrow(/ENOENT/);
   });
 
   it("connect configures cursor end to end", async () => {
     const home = await tmp();
-    const lines = await connect({ agent: "cursor", mcpUrl: url, credential: "good-token" }, home);
-    expect(lines[0]).toContain("as alice");
+    const lines = await connect(
+      { agent: "cursor", mcpUrl: url, credential: "good-token" },
+      { home, env: {} },
+    );
+    expect(lines[0]).toMatch(/^Connected cursor .* as alice\.$/);
     const config = JSON.parse(await readFile(join(home, ".cursor", "mcp.json"), "utf8"));
     expect(config.mcpServers.quorus).toEqual({
       url,
