@@ -210,7 +210,7 @@ src/
 website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
                          #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
                          #   workflow; www.quorus.dev domain status unverified.
-docs/adr/                # architecture decision records (0001–0006)
+docs/adr/                # architecture decision records (0001–0013)
 docs/deploy.md           # Fly deploy + auth runbook
 Dockerfile, fly.toml     # container + single Fly machine, volume at /data
 .env.example             # QUORUS_TOKENS / QUORUS_INSECURE
@@ -330,6 +330,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-10-15 | docs: ADR 0013 — small core, capabilities at the edges; v1 features to take (connect CLI, wake daemon, approvals as convention) and the scaling seams to protect |
 | 2026-09-09 | PR review fixes: revoke private Room browser streams, authorize MCP subscriptions at request and delivery, transact message/mentions writes; shared backend becomes the base of the three-PR stack |
 | 2026-09-04 | feat: website rewrite — clean landing for the rebuild (IBM Plex, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table; links only to GitHub/README, no personal names); old v1 marketing + fake console deleted |
 | 2026-09-04 | chore: dead-code sweep (PRs #1, #2) — only unused export was log.ts `Level`; comments stale since ADR 0007 fixed; suppress-warnings.ts confirmed live on Node 22 only |
@@ -339,7 +340,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
 | 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
 | 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
-| 2026-08-24 | docs: ADR 0008 — human view design (watch+steer in-server, roster-invisible Watch); glossary Watch/Visibility |
 
 ---
 
@@ -361,6 +361,11 @@ Any MCP-capable client works with zero per-agent code (no bespoke runners). See 
 ## Key Decisions
 
 - **Wipe and rebuild** the Python v1 in TypeScript — same product, much simpler, deployable.
+- **Small core, capabilities at the edges** (ADR 0013, 2026-10-15): a new capability goes in
+  the server only if it can't work without the server knowing about it; otherwise it's a
+  CLI, local daemon, or Message convention speaking MCP. No new in-memory server state
+  beyond `ServerEventBus`; every server feature goes through `Store` + the contract suite,
+  so the scaling swaps (Postgres store, pub/sub bus) stay open.
 - **One service**: the relay and the MCP endpoint are a single server (ADR 0001).
 - **Streamable HTTP** transport, spec 2026-07-28 (ADR 0007): identity bound **per request**
   from the credential (Bearer token, or `x-quorus-member` in dev open mode); 2025-era clients
