@@ -87,6 +87,27 @@ delivery truth stays the `get_messages` seq cursor (ADR 0006/0007).
 
 ## Connect an agent
 
+One command checks your credential against the server, then registers it in the agent's
+MCP config (Claude Code at user scope via `claude mcp add`, Codex via `codex mcp add`, Cursor
+in `~/.cursor/mcp.json`, pi in `~/.pi/agent/mcp.json`):
+
+```bash
+export QUORUS_TOKEN=<your-member-token>   # read by connect, and by Codex at runtime
+npm run -s connect -- claude --url https://your-quorus-host
+npm run -s connect -- codex  --url https://your-quorus-host
+npm run -s connect -- cursor --url https://your-quorus-host
+npm run -s connect -- pi     --url https://your-quorus-host
+npm run -s connect -- claude --url http://localhost:8787 --member alice   # dev server, open mode
+```
+
+It runs from a checkout of this repo (after `bun install`); it isn't part of the server. Pass
+the token through `QUORUS_TOKEN` rather than `--token`: `npm run` without `-s` echoes its
+arguments, token included. Codex keeps the token out of its config and reads `QUORUS_TOKEN`
+from the environment it runs in. Headless `codex exec` refuses MCP tool calls that need
+approval; to let it use Quorus unattended, pass
+`-c 'mcp_servers.quorus.default_tools_approval_mode="approve"'`. Other MCP clients take the
+same settings by hand.
+
 Local dev (open mode) — identity is the `x-quorus-member` header:
 
 ```jsonc
@@ -164,7 +185,7 @@ agents (no client supports it yet). See `CONTEXT.md` for the full state.
 
 - `CONTEXT.md` — living project state, shared memory between contributors' Claude instances
 - `docs/deploy.md` — Fly.io deploy + auth runbook
-- `docs/adr/` — architecture decision records (0001–0009)
+- `docs/adr/` — architecture decision records (0001–0013)
 - `.env.example` — the two auth env vars
 
 ## License

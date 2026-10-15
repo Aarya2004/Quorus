@@ -3,12 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-09-04 (**website rewritten** for the TypeScript rebuild — single-route Vite/React landing, copy mirrors the README, hero replays a Room; PR #3 under Aarya's review. Dead-code sweep: PRs #1/#2. 2026-08-31: **@mentions shipped** (ADR 0012, wayfinder map T1–T5, TDD, codex
-subagents implementing): explicit `mentions` metadata on send (roster-validated, fail-loud),
-`mentions_me` polling filter, view "for you" emphasis + cosmetic @token highlight + roster
-autocomplete; SQLite `message_mentions` join table migrates pre-0012 volumes untouched.
-97 tests. Earlier same day: view v2 shipped (ADR 0010); catch-up summaries decided +
-deferred (ADR 0011).)
+Last updated: 2026-10-15 (**ADR 0013 — small core, capabilities at the edges**; first edge tool `npm run connect` registers Quorus in Claude Code / Codex / Cursor / pi. Next: the wake daemon as an edge Member, needs an ADR superseding part of 0006.)
 
 ---
 
@@ -206,7 +201,9 @@ src/
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  *.test.ts              # 97 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API)
+  cli/main.ts            # `npm run connect` entry: args → connect() → exit code
+  cli/connect.ts         # `npm run connect` — register Quorus in claude/codex/cursor/pi MCP config (edge tool, ADR 0013)
+  *.test.ts              # 131 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API), connect CLI
 website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
                          #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
                          #   workflow; www.quorus.dev domain status unverified.
@@ -227,7 +224,8 @@ SQLite at `./data/quorus.db`; `dev` sets `QUORUS_INSECURE=true` — open auth mo
 **Env vars:** `QUORUS_TOKENS` / `QUORUS_INSECURE` (auth, ADR 0005) · `QUORUS_DB_PATH` (SQLite
 file) · `QUORUS_DATA_DIR` (JSONL dir) · `QUORUS_LOG_LEVEL` · `PORT`.
 
-**How an agent connects:** add the server URL as a remote MCP server. Local dev (open mode):
+**How an agent connects:** `npm run connect -- <claude|codex|cursor|pi> --url … --token …`, or
+add the server URL as a remote MCP server by hand. Local dev (open mode):
 an `x-quorus-member` header carries the Member name. Deployed (token mode): `Authorization:
 Bearer <member-token>` — identity is *derived* from the token, and a contradicting member
 header is rejected. Either way identity is bound per connection — no tool takes a `from` arg.
@@ -314,7 +312,13 @@ send → poll all work).* Roadmap:
    client turns a notification into an agent turn yet (Claude Code refreshes caches only;
    Channels can't ride 2026-07-28 — claude-code#44380 still open). Revisit when a client acts
    on resource-updated pings.
-6. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
+6. **Edge tools (ADR 0013)** — `npm run connect` ✅ DONE 2026-10-15 (claude, codex, cursor,
+   pi; real-agent e2e verified for claude/codex/pi, cursor config-only). **Next:** the wake
+   daemon as an edge Member (polls `mentions_me`, starts the agent; ACP for the long tail,
+   direct adapters for Claude/Codex) — needs an ADR that supersedes part of 0006 first.
+   Open question for Aarya: should `connect codex` set Codex's tool auto-approval (needed
+   for headless `codex exec`)?
+7. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
    hold? Only then invest in: Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
 **Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.
@@ -330,6 +334,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
+| 2026-10-15 | feat: `npm run connect -- <agent>` (claude, codex, cursor, pi; `src/cli/`, ADR 0013's first edge tool) — verifies the credential via `/api/me`, then writes the agent's MCP config; not in the server bundle |
 | 2026-10-15 | docs: ADR 0013 — small core, capabilities at the edges; v1 features to take (connect CLI, wake daemon, approvals as convention) and the scaling seams to protect |
 | 2026-09-09 | PR review fixes: revoke private Room browser streams, authorize MCP subscriptions at request and delivery, transact message/mentions writes; shared backend becomes the base of the three-PR stack |
 | 2026-09-04 | feat: website rewrite — clean landing for the rebuild (IBM Plex, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table; links only to GitHub/README, no personal names); old v1 marketing + fake console deleted |
@@ -339,7 +344,6 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 | 2026-08-30 | docs: chat-UI research (primary sources) + ADR 0010 view v2 + ADR 0011 catch-up summaries (deferred); Direction B mocks ratified |
 | 2026-08-25 | feat: private Rooms (ADR 0009, TDD) — roster-gated Visibility, invite_member + set_visibility (8 tools), shared canAccess guard across tools + view |
 | 2026-08-25 | docs: README rewrite for post-0007/0008 state (human view, 6 tools, self-host connect); demo dropped from scope |
-| 2026-08-24 | feat: human view first draft — list_rooms, backward pagination, live SSE + styled page (ADR 0008, TDD) |
 
 ---
 
