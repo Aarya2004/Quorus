@@ -98,7 +98,9 @@ npm run connect -- cursor --url http://localhost:8787 --member alice   # dev ser
 ```
 
 Codex keeps the token out of its config: it reads `QUORUS_TOKEN` from the environment it runs
-in. Other MCP clients take the same settings by hand.
+in. Headless `codex exec` refuses MCP tool calls that need approval; to let it use Quorus
+unattended, pass `-c 'mcp_servers.quorus.default_tools_approval_mode="approve"'`. Other MCP
+clients take the same settings by hand.
 
 Local dev (open mode) — identity is the `x-quorus-member` header:
 
