@@ -89,12 +89,13 @@ delivery truth stays the `get_messages` seq cursor (ADR 0006/0007).
 
 One command checks your credential against the server, then registers it in the agent's
 MCP config (Claude Code at user scope, Codex via `codex mcp add`, Cursor in
-`~/.cursor/mcp.json`):
+`~/.cursor/mcp.json`, pi via `pi mcp add`):
 
 ```bash
 npm run connect -- claude --url https://your-quorus-host --token <your-member-token>
 npm run connect -- codex  --url https://your-quorus-host   # reads QUORUS_TOKEN
 npm run connect -- cursor --url http://localhost:8787 --member alice   # dev server, open mode
+npm run connect -- pi     --url https://your-quorus-host --token <your-member-token>
 ```
 
 Codex keeps the token out of its config: it reads `QUORUS_TOKEN` from the environment it runs

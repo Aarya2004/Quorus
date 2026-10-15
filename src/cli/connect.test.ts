@@ -124,6 +124,27 @@ describe("planConnect", () => {
     expect(stale.notes.join("\n")).not.toContain("other");
   });
 
+  it("pi: add-or-replace with a bearer header", () => {
+    const { steps, complete } = planConnect({ ...opts, agent: "pi" }, { home: "/home/u", env: {} });
+    expect(steps).toEqual([
+      {
+        kind: "exec",
+        argv: [
+          "pi",
+          "mcp",
+          "add",
+          "quorus",
+          "--url",
+          "http://h:8787/mcp",
+          "--header",
+          "Authorization=Bearer s3cret-tok",
+        ],
+        mayFail: false,
+      },
+    ]);
+    expect(complete).toBe(true);
+  });
+
   it("cursor: merges into ~/.cursor/mcp.json", () => {
     const { steps } = planConnect({ ...opts, agent: "cursor" }, { home: "/home/u", env: {} });
     expect(steps).toEqual([

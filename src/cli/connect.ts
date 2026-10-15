@@ -15,7 +15,7 @@ export const SERVER_NAME = "quorus";
 /** Codex reads bearer tokens from an env var; it has no static-header CLI flag. */
 export const TOKEN_ENV = "QUORUS_TOKEN";
 
-const Agent = z.enum(["claude", "codex", "cursor"]);
+const Agent = z.enum(["claude", "codex", "cursor", "pi"]);
 export type Agent = z.infer<typeof Agent>;
 
 export type ConnectOptions = {
@@ -38,7 +38,7 @@ export type Plan = { steps: Step[]; notes: string[]; complete: boolean };
 /** Where the user's config lives and what their shell holds. */
 export type Machine = { home: string; env: NodeJS.ProcessEnv };
 
-export const USAGE = `Usage: npm run connect -- <claude|codex|cursor> --url <server-url> [--token <token> | --member <name>]
+export const USAGE = `Usage: npm run connect -- <claude|codex|cursor|pi> --url <server-url> [--token <token> | --member <name>]
 
   --url     The Quorus server, e.g. https://quorus.example.com (a trailing /mcp is fine)
   --token   Your Member Token (or set ${TOKEN_ENV})
@@ -58,7 +58,7 @@ export function parseConnectArgs(args: string[], env: NodeJS.ProcessEnv): Connec
   });
   const agent = Agent.safeParse(positionals[0]);
   if (!agent.success || positionals.length !== 1) {
-    throw new Error("Name exactly one agent: claude, codex, or cursor.");
+    throw new Error("Name exactly one agent: claude, codex, cursor, or pi.");
   }
   if (!values.url) throw new Error("Missing --url.");
   if (values.token && values.member) throw new Error("Pass --token or --member, not both.");
@@ -150,6 +150,28 @@ export function planConnect(opts: ConnectOptions, { home, env }: Machine): Plan 
           },
         ],
         notes: ["Reload Cursor to load the server."],
+        complete: true,
+      };
+    case "pi":
+      return {
+        // `pi mcp add` replaces an existing entry of the same name.
+        steps: [
+          {
+            kind: "exec",
+            argv: [
+              "pi",
+              "mcp",
+              "add",
+              SERVER_NAME,
+              "--url",
+              opts.mcpUrl,
+              "--header",
+              `Authorization=${auth}`,
+            ],
+            mayFail: false,
+          },
+        ],
+        notes: ["Start a new pi session to load the server; check it with `pi mcp list`."],
         complete: true,
       };
     default: {

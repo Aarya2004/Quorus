@@ -3,7 +3,7 @@
 > **This file is the shared memory between all contributors' Claude instances.**
 > Read this at session start. Update it after every significant change. Commit it with your work.
 
-Last updated: 2026-10-15 (**ADR 0013 — small core, capabilities at the edges**; first edge tool `npm run connect` registers Quorus in Claude Code / Codex / Cursor. Next: the wake daemon as an edge Member, needs an ADR superseding part of 0006.)
+Last updated: 2026-10-15 (**ADR 0013 — small core, capabilities at the edges**; first edge tool `npm run connect` registers Quorus in Claude Code / Codex / Cursor / pi. Next: the wake daemon as an edge Member, needs an ADR superseding part of 0006.)
 
 ---
 
@@ -201,7 +201,7 @@ src/
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
-  cli/connect.ts         # `npm run connect` — register Quorus in claude/codex/cursor MCP config (edge tool, ADR 0013)
+  cli/connect.ts         # `npm run connect` — register Quorus in claude/codex/cursor/pi MCP config (edge tool, ADR 0013)
   *.test.ts              # 122 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API), connect CLI
 website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
                          #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
@@ -223,7 +223,7 @@ SQLite at `./data/quorus.db`; `dev` sets `QUORUS_INSECURE=true` — open auth mo
 **Env vars:** `QUORUS_TOKENS` / `QUORUS_INSECURE` (auth, ADR 0005) · `QUORUS_DB_PATH` (SQLite
 file) · `QUORUS_DATA_DIR` (JSONL dir) · `QUORUS_LOG_LEVEL` · `PORT`.
 
-**How an agent connects:** `npm run connect -- <claude|codex|cursor> --url … --token …`, or
+**How an agent connects:** `npm run connect -- <claude|codex|cursor|pi> --url … --token …`, or
 add the server URL as a remote MCP server by hand. Local dev (open mode):
 an `x-quorus-member` header carries the Member name. Deployed (token mode): `Authorization:
 Bearer <member-token>` — identity is *derived* from the token, and a contradicting member
@@ -327,7 +327,7 @@ seq-ordered makes cold segments trivial. Not needed at current scale.
 
 | Date       | What                                                                       |
 | ---------- | -------------------------------------------------------------------------- |
-| 2026-10-15 | feat: `npm run connect -- <claude|codex|cursor>` (`src/cli/`, ADR 0013's first edge tool) — verifies the credential via `/api/me`, then writes the agent's MCP config; not in the server bundle |
+| 2026-10-15 | feat: `npm run connect -- <agent>` (claude, codex, cursor, pi; `src/cli/`, ADR 0013's first edge tool) — verifies the credential via `/api/me`, then writes the agent's MCP config; not in the server bundle |
 | 2026-10-15 | docs: ADR 0013 — small core, capabilities at the edges; v1 features to take (connect CLI, wake daemon, approvals as convention) and the scaling seams to protect |
 | 2026-09-09 | PR review fixes: revoke private Room browser streams, authorize MCP subscriptions at request and delivery, transact message/mentions writes; shared backend becomes the base of the three-PR stack |
 | 2026-09-04 | feat: website rewrite — clean landing for the rebuild (IBM Plex, ultramarine signal, hero Room replay, hub-to-hub wire diagram, 8-tool table; links only to GitHub/README, no personal names); old v1 marketing + fake console deleted |
