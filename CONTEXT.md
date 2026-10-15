@@ -201,8 +201,9 @@ src/
   server/page-client.ts  # human view client JS (transcript, stream, compose, token gate)
   server/app.ts          # Hono app: auth + /mcp (Streamable HTTP) + /health
   index.ts               # bootstrap: loadAuthConfig + SqliteStore + serve
+  cli/main.ts            # `npm run connect` entry: args → connect() → exit code
   cli/connect.ts         # `npm run connect` — register Quorus in claude/codex/cursor/pi MCP config (edge tool, ADR 0013)
-  *.test.ts              # 122 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API), connect CLI
+  *.test.ts              # 131 tests: store contract ×2 backends, auth config, logger, tools, page guards, HTTP e2e (modern + legacy eras + view API), connect CLI
 website/                 # Vite+React landing page, rewritten 2026-09-04 for the rebuild (copy
                          #   mirrors README + docs/adr via src/data/*.ts). Manual Vercel deploy
                          #   workflow; www.quorus.dev domain status unverified.
@@ -311,7 +312,13 @@ send → poll all work).* Roadmap:
    client turns a notification into an agent turn yet (Claude Code refreshes caches only;
    Channels can't ride 2026-07-28 — claude-code#44380 still open). Revisit when a client acts
    on resource-updated pings.
-6. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
+6. **Edge tools (ADR 0013)** — `npm run connect` ✅ DONE 2026-10-15 (claude, codex, cursor,
+   pi; real-agent e2e verified for claude/codex/pi, cursor config-only). **Next:** the wake
+   daemon as an edge Member (polls `mentions_me`, starts the agent; ACP for the long tail,
+   direct adapters for Claude/Codex) — needs an ADR that supersedes part of 0006 first.
+   Open question for Aarya: should `connect codex` set Codex's tool auto-approval (needed
+   for headless `codex exec`)?
+7. **— reassess after dogfooding —** does the orchestrator-tier + human-steer + cross-client bet
    hold? Only then invest in: Workspaces, discovery (`list_rooms`), managed quorus.dev.
 
 **Deferred** (per hypothesis): advisory leases/locks; shared goal/decisions primitives.

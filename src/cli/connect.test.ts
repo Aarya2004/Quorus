@@ -10,6 +10,7 @@ import {
   mergeMcpJson,
   parseConnectArgs,
   planConnect,
+  runStep,
   TOKEN_ENV,
   toMcpUrl,
   whoAmI,
@@ -50,7 +51,9 @@ describe("parseConnectArgs", () => {
   });
 
   it("rejects bad input with a message", () => {
-    expect(() => parseConnectArgs(["windsurf", ...url, "--token", "t"], {})).toThrow(/one agent/);
+    expect(() => parseConnectArgs(["windsurf", ...url, "--token", "t"], {})).toThrow(
+      /one agent: claude, codex, cursor, pi\./,
+    );
     expect(() => parseConnectArgs(["claude", "codex", ...url], {})).toThrow(/one agent/);
     expect(() => parseConnectArgs(["claude", "--token", "t"], {})).toThrow(/--url/);
     expect(() => parseConnectArgs(["claude", ...url], {})).toThrow(/credential/);
@@ -124,25 +127,29 @@ describe("planConnect", () => {
     expect(stale.notes.join("\n")).not.toContain("other");
   });
 
-  it("pi: add-or-replace with a bearer header", () => {
-    const { steps, complete } = planConnect({ ...opts, agent: "pi" }, { home: "/home/u", env: {} });
-    expect(steps).toEqual([
-      {
-        kind: "exec",
-        argv: [
-          "pi",
-          "mcp",
-          "add",
-          "quorus",
-          "--url",
-          "http://h:8787/mcp",
-          "--header",
-          "Authorization=Bearer s3cret-tok",
-        ],
-        mayFail: false,
-      },
-    ]);
-    expect(complete).toBe(true);
+  it("pi: merges into pi's mcp.json, honouring PI_CODING_AGENT_DIR", () => {
+    const plan = (env: NodeJS.ProcessEnv) =>
+      planConnect({ ...opts, agent: "pi" }, { home: "/home/u", env });
+    const entry = { url: "http://h:8787/mcp", headers: { Authorization: "Bearer s3cret-tok" } };
+    expect(plan({})).toEqual({
+      steps: [{ kind: "merge-json", path: "/home/u/.pi/agent/mcp.json", entry }],
+      notes: [expect.stringContaining("pi mcp list")],
+      complete: true,
+    });
+    expect(plan({ PI_CODING_AGENT_DIR: "/cfg/pi" }).steps[0]).toMatchObject({
+      path: "/cfg/pi/mcp.json",
+    });
+  });
+
+  it("pi: escapes `$` so pi doesn't expand the credential as a variable", () => {
+    const { steps } = planConnect(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal `${X}` is the point
+      { ...opts, agent: "pi", credential: "a$b${X}c" },
+      { home: "/home/u", env: {} },
+    );
+    expect(steps[0]).toMatchObject({
+      entry: { headers: { Authorization: "Bearer a$$b$${X}c" } },
+    });
   });
 
   it("cursor: merges into ~/.cursor/mcp.json", () => {
@@ -154,6 +161,27 @@ describe("planConnect", () => {
         entry: { url: "http://h:8787/mcp", headers: { Authorization: "Bearer s3cret-tok" } },
       },
     ]);
+  });
+});
+
+describe("runStep (exec)", () => {
+  const exec = (argv: [string, ...string[]], mayFail = false) =>
+    runStep({ kind: "exec", argv, mayFail }, "s3cret-tok");
+
+  it("surfaces a failing command's stderr with the credential scrubbed", async () => {
+    await expect(
+      exec(["sh", "-c", "echo 'bad header Bearer s3cret-tok' >&2; exit 1"]),
+    ).rejects.toThrow(
+      "`sh -c echo 'bad header Bearer s3cret-tok' >&2; exit 1` failed: bad header Bearer <credential>",
+    );
+  });
+
+  it("names a missing binary", async () => {
+    await expect(exec(["quorus-no-such-binary"])).rejects.toThrow(/not on your PATH/);
+  });
+
+  it("ignores failure when the step may fail", async () => {
+    await expect(exec(["sh", "-c", "exit 1"], true)).resolves.toBeUndefined();
   });
 });
 

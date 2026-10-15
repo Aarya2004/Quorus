@@ -38,10 +38,10 @@ export type Plan = { steps: Step[]; notes: string[]; complete: boolean };
 /** Where the user's config lives and what their shell holds. */
 export type Machine = { home: string; env: NodeJS.ProcessEnv };
 
-export const USAGE = `Usage: npm run connect -- <claude|codex|cursor|pi> --url <server-url> [--token <token> | --member <name>]
+export const USAGE = `Usage: npm run connect -- <${Agent.options.join("|")}> --url <server-url> [--token <token> | --member <name>]
 
   --url     The Quorus server, e.g. https://quorus.example.com (a trailing /mcp is fine)
-  --token   Your Member Token (or set ${TOKEN_ENV})
+  --token   Your Member Token. Prefer setting ${TOKEN_ENV}: flags show up in shell history
   --member  Your Member name, for a dev server running in open mode`;
 
 /** Parse CLI arguments. Throws a user-facing message on anything invalid. */
@@ -58,7 +58,7 @@ export function parseConnectArgs(args: string[], env: NodeJS.ProcessEnv): Connec
   });
   const agent = Agent.safeParse(positionals[0]);
   if (!agent.success || positionals.length !== 1) {
-    throw new Error("Name exactly one agent: claude, codex, cursor, or pi.");
+    throw new Error(`Name exactly one agent: ${Agent.options.join(", ")}.`);
   }
   if (!values.url) throw new Error("Missing --url.");
   if (values.token && values.member) throw new Error("Pass --token or --member, not both.");
@@ -154,21 +154,17 @@ export function planConnect(opts: ConnectOptions, { home, env }: Machine): Plan 
       };
     case "pi":
       return {
-        // `pi mcp add` replaces an existing entry of the same name.
+        // Same JSON shape `pi mcp add` writes, merged directly so the file gets 0600 (pi
+        // leaves it world-readable) and the credential stays out of argv.
         steps: [
           {
-            kind: "exec",
-            argv: [
-              "pi",
-              "mcp",
-              "add",
-              SERVER_NAME,
-              "--url",
-              opts.mcpUrl,
-              "--header",
-              `Authorization=${auth}`,
-            ],
-            mayFail: false,
+            kind: "merge-json",
+            path: join(env.PI_CODING_AGENT_DIR ?? join(home, ".pi", "agent"), "mcp.json"),
+            // pi expands `$NAME` / `${NAME}` in header values; `$$` is a literal `$`.
+            entry: {
+              url: opts.mcpUrl,
+              headers: { Authorization: auth.replaceAll("$", () => "$$") },
+            },
           },
         ],
         notes: ["Start a new pi session to load the server; check it with `pi mcp list`."],
@@ -257,8 +253,8 @@ export async function mergeMcpJson(link: string, entry: McpEntry): Promise<void>
   // Write-then-rename so a crash never leaves a half-written config. A fresh, exclusive
   // temp file guarantees 0600 (it holds a credential); an existing one could keep its mode.
   const tmp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
-  await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600, flag: "wx" });
   try {
+    await writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     // Narrow the read-modify-write race: never overwrite an edit made since we read.
     if ((await readIfExists(path)) !== text) {
       throw new Error(`${path} changed while connecting; run the command again.`);
@@ -294,7 +290,7 @@ export async function whoAmI(mcpUrl: string, credential: string): Promise<string
 const execFileAsync = promisify(execFile);
 
 /** Run one step. `secret` is scrubbed from any child output we surface (it rides argv). */
-async function runStep(step: Step, secret: string): Promise<void> {
+export async function runStep(step: Step, secret: string): Promise<void> {
   if (step.kind === "merge-json") return mergeMcpJson(step.path, step.entry);
   const [cmd, ...args] = step.argv;
   try {

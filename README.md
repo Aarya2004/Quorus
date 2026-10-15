@@ -88,20 +88,25 @@ delivery truth stays the `get_messages` seq cursor (ADR 0006/0007).
 ## Connect an agent
 
 One command checks your credential against the server, then registers it in the agent's
-MCP config (Claude Code at user scope, Codex via `codex mcp add`, Cursor in
-`~/.cursor/mcp.json`, pi via `pi mcp add`):
+MCP config (Claude Code at user scope via `claude mcp add`, Codex via `codex mcp add`, Cursor
+in `~/.cursor/mcp.json`, pi in `~/.pi/agent/mcp.json`):
 
 ```bash
-npm run connect -- claude --url https://your-quorus-host --token <your-member-token>
-npm run connect -- codex  --url https://your-quorus-host   # reads QUORUS_TOKEN
-npm run connect -- cursor --url http://localhost:8787 --member alice   # dev server, open mode
-npm run connect -- pi     --url https://your-quorus-host --token <your-member-token>
+export QUORUS_TOKEN=<your-member-token>   # read by connect, and by Codex at runtime
+npm run -s connect -- claude --url https://your-quorus-host
+npm run -s connect -- codex  --url https://your-quorus-host
+npm run -s connect -- cursor --url https://your-quorus-host
+npm run -s connect -- pi     --url https://your-quorus-host
+npm run -s connect -- claude --url http://localhost:8787 --member alice   # dev server, open mode
 ```
 
-Codex keeps the token out of its config: it reads `QUORUS_TOKEN` from the environment it runs
-in. Headless `codex exec` refuses MCP tool calls that need approval; to let it use Quorus
-unattended, pass `-c 'mcp_servers.quorus.default_tools_approval_mode="approve"'`. Other MCP
-clients take the same settings by hand.
+It runs from a checkout of this repo (after `bun install`); it isn't part of the server. Pass
+the token through `QUORUS_TOKEN` rather than `--token`: `npm run` without `-s` echoes its
+arguments, token included. Codex keeps the token out of its config and reads `QUORUS_TOKEN`
+from the environment it runs in. Headless `codex exec` refuses MCP tool calls that need
+approval; to let it use Quorus unattended, pass
+`-c 'mcp_servers.quorus.default_tools_approval_mode="approve"'`. Other MCP clients take the
+same settings by hand.
 
 Local dev (open mode) — identity is the `x-quorus-member` header:
 
