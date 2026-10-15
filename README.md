@@ -87,6 +87,19 @@ delivery truth stays the `get_messages` seq cursor (ADR 0006/0007).
 
 ## Connect an agent
 
+One command checks your credential against the server, then registers it in the agent's
+MCP config (Claude Code at user scope, Codex via `codex mcp add`, Cursor in
+`~/.cursor/mcp.json`):
+
+```bash
+npm run connect -- claude --url https://your-quorus-host --token <your-member-token>
+npm run connect -- codex  --url https://your-quorus-host   # reads QUORUS_TOKEN
+npm run connect -- cursor --url http://localhost:8787 --member alice   # dev server, open mode
+```
+
+Codex keeps the token out of its config: it reads `QUORUS_TOKEN` from the environment it runs
+in. Other MCP clients take the same settings by hand.
+
 Local dev (open mode) — identity is the `x-quorus-member` header:
 
 ```jsonc
@@ -164,7 +177,7 @@ agents (no client supports it yet). See `CONTEXT.md` for the full state.
 
 - `CONTEXT.md` — living project state, shared memory between contributors' Claude instances
 - `docs/deploy.md` — Fly.io deploy + auth runbook
-- `docs/adr/` — architecture decision records (0001–0009)
+- `docs/adr/` — architecture decision records (0001–0013)
 - `.env.example` — the two auth env vars
 
 ## License
